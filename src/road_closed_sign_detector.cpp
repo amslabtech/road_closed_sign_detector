@@ -9,7 +9,6 @@
 #include<pcl/filters/voxel_grid.h>
 #include<Eigen/Core>
 
-
 struct Cluster{
 	float x;
 	float y;
@@ -30,13 +29,20 @@ struct Clusters{
 class Color_cone_detector{
 	private:
 		ros::NodeHandle nh;
-		tf::TransformListener tflistener;
+		ros::NodeHandle private_nh;
+
 		ros::Subscriber hokuyo_sub;
 		ros::Subscriber velodyne_sub;
-
 		ros::Publisher pub;
+
 		sensor_msgs::PointCloud2 cloud_input;
 		std::vector<sensor_msgs::PointCloud2> cloud_clusters_ros_;
+
+		double leaf_size;
+		double tolerance;
+		int min_cluster_size, max_cluster_size;
+		double max_width, max_height, max_depth;
+		double min_width, min_height, min_depth;
 
 	public:
 		Color_cone_detector();
@@ -44,14 +50,27 @@ class Color_cone_detector{
 		void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr& msg);
 		void getClusterInfo(pcl::PointCloud<pcl::PointXYZ> cloud, Cluster& cluster);
 		void clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, std::vector<Clusters> &cluster_array, std::vector<pcl::PointIndices> &cluster_indices);
+		void pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr clouds, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_centroid, std::vector<Clusters> &cluster_array);
 		void extractCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_pcl_ptr, std::vector<pcl::PointIndices> &cluster_indices);
 };
 
 Color_cone_detector::Color_cone_detector()
+	: private_nh("~")
 {
 	hokuyo_sub = nh.subscribe("/hokuyo_obstacles", 1, &Color_cone_detector::hokuyo_callback, this);
 	velodyne_sub = nh.subscribe("/velodyne_obstacles", 1, &Color_cone_detector::velodyne_callback, this);
 	pub = nh.advertise<sensor_msgs::PointCloud2>("cluster_test",1);
+
+	private_nh.param("leaf_size", leaf_size, 0.08);
+	private_nh.param("tolerance", tolerance, 0.15);
+	private_nh.param("min_cluster_size", min_cluster_size, 20);
+	private_nh.param("max_cluster_size", max_cluster_size, 1200);
+	private_nh.param("max_width", max_width, 0.6);
+	private_nh.param("max_height", max_height, 0.8);
+	private_nh.param("max_depth", max_depth, 0.6);
+	private_nh.param("min_width", min_width, 0.1);
+	private_nh.param("min_heigt", min_height, 0.3);
+	private_nh.param("min_depth", min_depth, 0.1);
 }
 
 void Color_cone_detector::getClusterInfo(pcl::PointCloud<pcl::PointXYZ> cloud, Cluster& cluster)
@@ -89,17 +108,18 @@ void Color_cone_detector::getClusterInfo(pcl::PointCloud<pcl::PointXYZ> cloud, C
 	cluster.y = centroid[1]/cloud.points.size();
 	cluster.z = centroid[2]/cloud.points.size();
 	cluster.depth = max_p[0] - min_p[0];
-	cluster.width = max_p[1] - max_p[1];
-	cluster.height = max_p[2] - max_p[2];
+	cluster.width = max_p[1] - min_p[1];
+	cluster.height = max_p[2] - min_p[2];
 	cluster.min_p = min_p;
 	cluster.max_p = max_p;
+
 }
 void Color_cone_detector::clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, std::vector<Clusters> &cluster_array, std::vector<pcl::PointIndices> &cluster_indices)
 {
 	pcl::PointCloud<pcl::PointXYZ>::Ptr ds_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::VoxelGrid<pcl::PointXYZ> vg;
 	vg.setInputCloud(cloud_in);
-	vg.setLeafSize(0.08f, 0.08f, 0.08f);
+	vg.setLeafSize(leaf_size, leaf_size, leaf_size);
 	vg.filter(*ds_cloud);
 
 	std::vector<float> tmp_point_z;
@@ -112,20 +132,20 @@ void Color_cone_detector::clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_i
 	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
 	tree->setInputCloud(ds_cloud);
 	pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-	ec.setClusterTolerance(0.15);
-	ec.setMinClusterSize(20);
-	ec.setMaxClusterSize(1200);
+	ec.setClusterTolerance(tolerance);
+	ec.setMinClusterSize(min_cluster_size);
+	ec.setMaxClusterSize(max_cluster_size);
 	ec.setSearchMethod(tree);
 	ec.setInputCloud(ds_cloud);
 	ec.extract(cluster_indices);
-
+	
 	for(int i=0; i<ds_cloud->points.size(); ++i)
 		ds_cloud->points[i].z = tmp_point_z[i];
 
 	for(int i=0; i<cluster_indices.size(); ++i){
 		pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
 		cloud_cluster->points.resize(cluster_indices[i].indices.size());
-
+		
 		for(int j=0; j < cluster_indices[i].indices.size(); ++j){
 			int point_id = cluster_indices[i].indices[j];
 			cloud_cluster->points[j] = ds_cloud->points[point_id];
@@ -141,15 +161,13 @@ void Color_cone_detector::clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_i
 		Clusters cluster;
 		cluster.data = data;
 		cluster.centroid.points.push_back(center);
+
 		for(int i=0; i<cloud_cluster->points.size(); ++i)
 			cluster.points.points.push_back(cloud_cluster->points[i]);
 
 		cluster_array.push_back(cluster);
 	}
 }
-
-
-
 
 void Color_cone_detector::extractCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_pcl_ptr, std::vector<pcl::PointIndices> &cluster_indices)
 {
@@ -170,28 +188,51 @@ void Color_cone_detector::extractCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr clo
 		pub.publish(cloud_cluster_ros);
 		
 	}
+}
 
+void Color_cone_detector::pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr clouds, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_centroid, std::vector<Clusters> &cluster_array)
+{
+	for(int i=0; i<cluster_array.size(); ++i){
+		Clusters cluster = cluster_array[i];
+		Cluster data = cluster.data;
+		if(min_width < data.width && data.width < max_width){
+			if(min_height < data.height && data.height < max_height){
+				if(min_depth < data.depth && data.depth < max_depth){
+					for(int j=0; j<cluster.points.points.size(); ++j)
+						clouds->points.push_back(cluster.points.points[j]);
+
+					cloud_centroid->points.push_back(cluster.centroid.points[0]);
+				}
+			}
+		}
+	}
 }
 
 void Color_cone_detector::velodyne_callback(const sensor_msgs::PointCloud2ConstPtr &msg)
 {
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_c(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr clouds(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_centroid(new pcl::PointCloud<pcl::PointXYZ>);
 
 	pcl::fromROSMsg(*msg, *cloud);
-	pcl::fromROSMsg(*msg, *cloud_c);
 
 	std::vector<pcl::PointIndices> cluster_indices;
 
 	std::vector<Clusters> cluster_array;
+
 	if(0 < cloud->points.size())
 		clustering(cloud, cluster_array, cluster_indices);
 
+	
+	pickup_cluster(clouds, cloud_centroid, cluster_array);
 
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_input_pcl_ptr (new pcl::PointCloud<pcl::PointXYZ>);
-
-	pcl::fromROSMsg(*msg, *cloud_input_pcl_ptr);
-	extractCluster(cloud_input_pcl_ptr, cluster_indices);
+	sensor_msgs::PointCloud2 cloud_ros;
+	pcl::toROSMsg(*clouds, cloud_ros);
+	cloud_ros.header.frame_id = msg->header.frame_id;
+	cloud_ros.header.stamp = ros::Time::now();
+	
+	//std::cout << "---publish---" << std::endl;
+	pub.publish(cloud_ros);
 
 }
 void Color_cone_detector::hokuyo_callback(const sensor_msgs::PointCloud2ConstPtr &msg)
