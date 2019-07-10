@@ -38,11 +38,11 @@ class Color_cone_detector{
 		sensor_msgs::PointCloud2 cloud_input;
 		std::vector<sensor_msgs::PointCloud2> cloud_clusters_ros_;
 
-		double leaf_size;
-		double tolerance;
-		int min_cluster_size, max_cluster_size;
-		double max_width, max_height, max_depth;
-		double min_width, min_height, min_depth;
+		double LEAF_SIZE;
+		double TOLERANCE;
+		int MIN_CLUSTER_SIZE, MAX_CLUSTER_SIZE;
+		double MAX_WIDTH, MAX_HEIGHT, MAX_DEPTH;
+		double MIN_WIDTH, MIN_HEIGHT, MIN_DEPTH;
 
 	public:
 		Color_cone_detector();
@@ -61,16 +61,16 @@ Color_cone_detector::Color_cone_detector()
 	velodyne_sub = nh.subscribe("/velodyne_obstacles", 1, &Color_cone_detector::velodyne_callback, this);
 	pub = nh.advertise<sensor_msgs::PointCloud2>("cluster_test",1);
 
-	private_nh.param("leaf_size", leaf_size, 0.08);
-	private_nh.param("tolerance", tolerance, 0.15);
-	private_nh.param("min_cluster_size", min_cluster_size, 20);
-	private_nh.param("max_cluster_size", max_cluster_size, 1200);
-	private_nh.param("max_width", max_width, 0.6);
-	private_nh.param("max_height", max_height, 0.8);
-	private_nh.param("max_depth", max_depth, 0.6);
-	private_nh.param("min_width", min_width, 0.1);
-	private_nh.param("min_heigt", min_height, 0.3);
-	private_nh.param("min_depth", min_depth, 0.1);
+	private_nh.param("LEAF_SIZE", LEAF_SIZE, 0.08);
+	private_nh.param("TOLERANCE", TOLERANCE, 0.15);
+	private_nh.param("MIN_CLUSTER_SIZE", MIN_CLUSTER_SIZE, 20);
+	private_nh.param("MAX_CLUSTER_SIZE", MAX_CLUSTER_SIZE, 1200);
+	private_nh.param("MAX_WIDTH", MAX_WIDTH, 0.4);
+	private_nh.param("MAX_HEIGHT", MAX_HEIGHT, 0.8);
+	private_nh.param("MAX_DEPTH", MAX_DEPTH, 0.4);
+	private_nh.param("MIN_WIDTH", MIN_WIDTH, 0.2);
+	private_nh.param("MIN_HEIGHT", MIN_HEIGHT, 0.4);
+	private_nh.param("MIN_DEPTH", MIN_DEPTH, 0.1);
 }
 
 void Color_cone_detector::getClusterInfo(pcl::PointCloud<pcl::PointXYZ> cloud, Cluster& cluster)
@@ -119,7 +119,7 @@ void Color_cone_detector::clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_i
 	pcl::PointCloud<pcl::PointXYZ>::Ptr ds_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::VoxelGrid<pcl::PointXYZ> vg;
 	vg.setInputCloud(cloud_in);
-	vg.setLeafSize(leaf_size, leaf_size, leaf_size);
+	vg.setLeafSize(LEAF_SIZE, LEAF_SIZE, LEAF_SIZE);
 	vg.filter(*ds_cloud);
 
 	std::vector<float> tmp_point_z;
@@ -132,9 +132,9 @@ void Color_cone_detector::clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_i
 	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
 	tree->setInputCloud(ds_cloud);
 	pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-	ec.setClusterTolerance(tolerance);
-	ec.setMinClusterSize(min_cluster_size);
-	ec.setMaxClusterSize(max_cluster_size);
+	ec.setClusterTolerance(TOLERANCE);
+	ec.setMinClusterSize(MIN_CLUSTER_SIZE);
+	ec.setMaxClusterSize(MAX_CLUSTER_SIZE);
 	ec.setSearchMethod(tree);
 	ec.setInputCloud(ds_cloud);
 	ec.extract(cluster_indices);
@@ -195,9 +195,10 @@ void Color_cone_detector::pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr clo
 	for(int i=0; i<cluster_array.size(); ++i){
 		Clusters cluster = cluster_array[i];
 		Cluster data = cluster.data;
-		if(min_width < data.width && data.width < max_width){
-			if(min_height < data.height && data.height < max_height){
-				if(min_depth < data.depth && data.depth < max_depth){
+		if(MIN_WIDTH < data.width && data.width < MAX_WIDTH){
+			if(MIN_HEIGHT < data.height && data.height < MAX_HEIGHT){
+				if(MIN_DEPTH < data.depth && data.depth < MAX_DEPTH){
+					std::cout << "width  :" << data.width << "  height  :" << data.height << "  depth  :" << data.depth << std::endl;
 					for(int j=0; j<cluster.points.points.size(); ++j)
 						clouds->points.push_back(cluster.points.points[j]);
 

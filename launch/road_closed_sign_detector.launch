@@ -2,7 +2,29 @@
 	<include file="$(find velodyne_pointcloud)/launch/32e_points.launch"/>
 	<include file="$(find velodyne_height_map)/launch/amsl_velodyne_heightmap.launch"/>
 
-	<node pkg="road_closed_sign_detector" type="road_closed_sign_detector" name="road_closed_sign_detector" output="screen"/>
+	<arg name="leaf_size" default="0.08"/>
+	<arg name="tolerance" default="0.15"/>
+	<arg name="min_cluster_size" default="20"/>
+	<arg name="max_cluster_size" default="1200"/>
+	<arg name="max_width" default="0.5"/>
+	<arg name="max_height" default="0.7"/>
+	<arg name="max_depth" default="0.42"/>
+	<arg name="min_width" default="0.2"/>
+	<arg name="min_height" default="0.6"/>
+	<arg name="min_depth" default="0.12"/>
+
+	<node pkg="road_closed_sign_detector" type="road_closed_sign_detector" name="road_closed_sign_detector" output="screen">
+		<param name="LEAF_SIZE" value="$(arg leaf_size)" type="double"/>
+		<param name="TOLERANCE" value="$(arg tolerance)" type="double"/>
+		<param name="MIN_CLUSTER_SIZE" value="$(arg min_cluster_size)" type="int"/>
+		<param name="MAX_CLUSTER_SIZE" value="$(arg max_cluster_size)" type="int"/>
+		<param name="MAX_WIDTH" value="$(arg max_width)" type="double"/>
+		<param name="MAX_HEIGHT" value="$(arg max_height)" type="double"/>
+		<param name="MAX_DEPTH" value="$(arg max_depth)" type="double"/>
+		<param name="MIN_WIDTH" value="$(arg min_width)" type="double"/>
+		<param name="MIN_HEIGHT" value="$(arg min_height)" type="double"/>
+		<param name="MIN_DEPTH" value="$(arg min_depth)" type="double"/>
+	</node>
 	<node pkg="rviz" type="rviz" name="rviz" args="-d $(find road_closed_sign_detector)/config/test.rviz"/>
 
 </launch>
