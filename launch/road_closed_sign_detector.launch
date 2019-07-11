@@ -8,10 +8,17 @@
 	<arg name="max_cluster_size" default="1200"/>
 	<arg name="max_width" default="0.5"/>
 	<arg name="max_height" default="0.7"/>
-	<arg name="max_depth" default="0.42"/>
+	<arg name="max_depth" default="0.4"/>
 	<arg name="min_width" default="0.2"/>
-	<arg name="min_height" default="0.6"/>
-	<arg name="min_depth" default="0.12"/>
+	<arg name="min_height" default="0.56"/>
+	<arg name="min_depth" default="0.1"/>
+	<arg name="angle_threshold" default="0.5"/>
+	<arg name="centroid_threshold" default="-1.0"/>
+	<arg name="dist2" default="1.9"/>
+	<arg name="dist3" default="1.4"/>
+	<arg name="dist4" default="1.0"/>
+	<arg name="dist_error_threshold" default="0.3"/>
+	
 
 	<node pkg="road_closed_sign_detector" type="road_closed_sign_detector" name="road_closed_sign_detector" output="screen">
 		<param name="LEAF_SIZE" value="$(arg leaf_size)" type="double"/>
@@ -24,6 +31,12 @@
 		<param name="MIN_WIDTH" value="$(arg min_width)" type="double"/>
 		<param name="MIN_HEIGHT" value="$(arg min_height)" type="double"/>
 		<param name="MIN_DEPTH" value="$(arg min_depth)" type="double"/>
+		<param name="ANGLE_THRESHOLD" value="$(arg angle_threshold)" type="double"/>
+		<param name="CENTROID_THRESHOLD" value="$(arg centroid_threshold)" type="double"/>
+		<param name="DIST2" value="$(arg dist2)" type="double"/>
+		<param name="DIST3" value="$(arg dist3)" type="double"/>
+		<param name="DIST4" value="$(arg dist4)" type="double"/>
+		<param name="DIST_ERROR_THRESHOLD" value="$(arg dist_error_threshold)" type="double"/>
 	</node>
 	<node pkg="rviz" type="rviz" name="rviz" args="-d $(find road_closed_sign_detector)/config/test.rviz"/>
 
