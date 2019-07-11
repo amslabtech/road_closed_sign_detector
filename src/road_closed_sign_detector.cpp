@@ -35,9 +35,6 @@ class Color_cone_detector{
 		ros::Publisher cloud_pub;
 		ros::Publisher flag_pub;
 
-		sensor_msgs::PointCloud2 cloud_input;
-		std::vector<sensor_msgs::PointCloud2> cloud_clusters_ros_;
-
 		double LEAF_SIZE;
 		double TOLERANCE;
 		int MIN_CLUSTER_SIZE, MAX_CLUSTER_SIZE;
@@ -60,7 +57,7 @@ Color_cone_detector::Color_cone_detector()
 	: private_nh("~")
 {
 	velodyne_sub = nh.subscribe("/velodyne_obstacles", 1, &Color_cone_detector::velodyne_callback, this);
-	cloud_pub = nh.advertise<sensor_msgs::PointCloud2>("cluster_test", 1);
+	cloud_pub = nh.advertise<sensor_msgs::PointCloud2>("/cloud/color_cone", 1);
 	flag_pub = nh.advertise<std_msgs::Bool>("/recognition/closed_sign", 1);
 
 	private_nh.param("LEAF_SIZE", LEAF_SIZE, 0.08);
@@ -93,10 +90,7 @@ double Color_cone_detector::square(double a)
 
 void Color_cone_detector::getClusterInfo(pcl::PointCloud<pcl::PointXYZ> cloud, Cluster& cluster)
 {
-	Eigen::Vector3f centroid;
-	centroid[0] = cloud.points[0].x;
-	centroid[1] = cloud.points[0].y;
-	centroid[2] = cloud.points[0].z;
+	Eigen::Vector3f centroid = {0.0, 0.0, 0.0};
 
 	Eigen::Vector3f min_p;
 	min_p[0] = cloud.points[0].x;
@@ -122,9 +116,9 @@ void Color_cone_detector::getClusterInfo(pcl::PointCloud<pcl::PointXYZ> cloud, C
 		if(cloud.points[i].z > max_p[2]) max_p[2] = cloud.points[i].z;
 	}
 
-	cluster.x = centroid[0]/cloud.points.size();
-	cluster.y = centroid[1]/cloud.points.size();
-	cluster.z = centroid[2]/cloud.points.size();
+	cluster.x = centroid[0] / cloud.points.size();
+	cluster.y = centroid[1] / cloud.points.size();
+	cluster.z = centroid[2] / cloud.points.size();
 	cluster.depth = max_p[0] - min_p[0];
 	cluster.width = max_p[1] - min_p[1];
 	cluster.height = max_p[2] - min_p[2];
@@ -241,7 +235,7 @@ void Color_cone_detector::pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr clo
 void Color_cone_detector::velodyne_callback(const sensor_msgs::PointCloud2ConstPtr &msg)
 {
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::PointCloud<pcl::PointXYZ>::Ptr clouds(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr color_cone_clouds(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_centroid(new pcl::PointCloud<pcl::PointXYZ>);
 
 	pcl::fromROSMsg(*msg, *cloud);
@@ -253,10 +247,10 @@ void Color_cone_detector::velodyne_callback(const sensor_msgs::PointCloud2ConstP
 	if(0 < cloud->points.size())
 		clustering(cloud, cluster_array, cluster_indices);
 	
-	pickup_cluster(clouds, cloud_centroid, cluster_array);
+	pickup_cluster(color_cone_clouds, cloud_centroid, cluster_array);
 
 	sensor_msgs::PointCloud2 cloud_ros;
-	pcl::toROSMsg(*clouds, cloud_ros);
+	pcl::toROSMsg(*color_cone_clouds, cloud_ros);
 	cloud_ros.header.frame_id = msg->header.frame_id;
 	cloud_ros.header.stamp = ros::Time::now();
 	
