@@ -2,22 +2,22 @@
 	<include file="$(find velodyne_pointcloud)/launch/32e_points.launch"/>
 	<include file="$(find velodyne_height_map)/launch/amsl_velodyne_heightmap.launch"/>
 
-	<arg name="leaf_size" default="0.08"/>
+	<arg name="leaf_size" default="0.07"/>
 	<arg name="tolerance" default="0.15"/>
 	<arg name="min_cluster_size" default="20"/>
 	<arg name="max_cluster_size" default="1200"/>
 	<arg name="max_width" default="0.5"/>
-	<arg name="max_height" default="0.7"/>
-	<arg name="max_depth" default="0.4"/>
+	<arg name="max_height" default="0.75"/>
+	<arg name="max_depth" default="0.5"/>
 	<arg name="min_width" default="0.2"/>
-	<arg name="min_height" default="0.56"/>
+	<arg name="min_height" default="0.58"/>
 	<arg name="min_depth" default="0.1"/>
-	<arg name="angle_threshold" default="0.5"/>
+	<arg name="angle_threshold" default="0.6"/>
 	<arg name="centroid_threshold" default="-1.0"/>
 	<arg name="dist2" default="1.9"/>
 	<arg name="dist3" default="1.4"/>
-	<arg name="dist4" default="1.0"/>
-	<arg name="dist_error_threshold" default="0.3"/>
+	<arg name="dist4" default="1.6"/>
+	<arg name="dist_error_threshold" default="0.2"/>
 	
 
 	<node pkg="road_closed_sign_detector" type="road_closed_sign_detector" name="road_closed_sign_detector" output="screen">

@@ -7,24 +7,8 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/common/pca.h>
 #include <Eigen/Core>
-
-struct Cluster{
-	float x;
-	float y;
-	float z;
-	float width;
-	float height;
-	float depth;
-	Eigen::Vector3f min_p;
-	Eigen::Vector3f max_p;
-};
-
-struct Clusters{
-	Cluster data;
-	pcl::PointCloud<pcl::PointXYZ> centroid;
-	pcl::PointCloud<pcl::PointXYZ> points;
-};
 
 class Color_cone_detector{
 	private:
@@ -48,9 +32,14 @@ class Color_cone_detector{
 		double pi_2_pi(double angle);
 		double square(double a);
 		void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr& msg);
-		void getClusterInfo(pcl::PointCloud<pcl::PointXYZ> cloud, Cluster& cluster);
-		void clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, std::vector<Clusters> &cluster_array, std::vector<pcl::PointIndices> &cluster_indices);
-		void pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr clouds, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_centroid, std::vector<Clusters> &cluster_array);
+		Eigen::Vector4f calc_centroid(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster);
+		Eigen::Vector3f calc_cluster_size(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster);
+		void clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, pcl::PointCloud<pcl::PointXYZ>::Ptr cone_cluster);
+
+		Eigen::Matrix3f pca(pcl::PointCloud<pcl::PointXYZ>::Ptr clouds);
+		bool judge_stop_sign(std::vector<Eigen::Vector4f> centroids);
+		bool pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster, Eigen::Vector4f centroid, Eigen::Vector3f size);
+
 };
 
 Color_cone_detector::Color_cone_detector()
@@ -88,47 +77,48 @@ double Color_cone_detector::square(double a)
 	return a*a;
 }
 
-void Color_cone_detector::getClusterInfo(pcl::PointCloud<pcl::PointXYZ> cloud, Cluster& cluster)
+Eigen::Vector4f Color_cone_detector::calc_centroid(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster)
 {
-	Eigen::Vector3f centroid = {0.0, 0.0, 0.0};
+	Eigen::Vector4f centroid;
+	pcl::compute3DCentroid(*cluster, centroid);
+	
+	return centroid;
+}
+Eigen::Vector3f Color_cone_detector::calc_cluster_size(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster)
+{
 
 	Eigen::Vector3f min_p;
-	min_p[0] = cloud.points[0].x;
-	min_p[1] = cloud.points[0].y;
-	min_p[2] = cloud.points[0].z;
+	min_p[0] = cluster->points[0].x;
+	min_p[1] = cluster->points[0].y;
+	min_p[2] = cluster->points[0].z;
 
 	Eigen::Vector3f max_p;
-	max_p[0] = cloud.points[0].x;
-	max_p[1] = cloud.points[0].y;
-	max_p[2] = cloud.points[0].z;
+	max_p[0] = cluster->points[0].x;
+	max_p[1] = cluster->points[0].y;
+	max_p[2] = cluster->points[0].z;
 
-	for(int i=0; i<cloud.points.size(); ++i){
-		centroid[0] += cloud.points[i].x;
-		centroid[1] += cloud.points[i].y;
-		centroid[2] += cloud.points[i].z;
+	for(size_t i=0; i<cluster->points.size(); ++i){
+		if(cluster->points[i].x < min_p[0]) min_p[0] = cluster->points[i].x;
+		if(cluster->points[i].y < min_p[1]) min_p[1] = cluster->points[i].y;
+		if(cluster->points[i].z < min_p[2]) min_p[2] = cluster->points[i].z;
 
-		if(cloud.points[i].x < min_p[0]) min_p[0] = cloud.points[i].x;
-		if(cloud.points[i].y < min_p[1]) min_p[1] = cloud.points[i].y;
-		if(cloud.points[i].z < min_p[2]) min_p[2] = cloud.points[i].z;
-
-		if(cloud.points[i].x > max_p[0]) max_p[0] = cloud.points[i].x;
-		if(cloud.points[i].y > max_p[1]) max_p[1] = cloud.points[i].y;
-		if(cloud.points[i].z > max_p[2]) max_p[2] = cloud.points[i].z;
+		if(cluster->points[i].x > max_p[0]) max_p[0] = cluster->points[i].x;
+		if(cluster->points[i].y > max_p[1]) max_p[1] = cluster->points[i].y;
+		if(cluster->points[i].z > max_p[2]) max_p[2] = cluster->points[i].z;
 	}
 
-	cluster.x = centroid[0] / cloud.points.size();
-	cluster.y = centroid[1] / cloud.points.size();
-	cluster.z = centroid[2] / cloud.points.size();
-	cluster.depth = max_p[0] - min_p[0];
-	cluster.width = max_p[1] - min_p[1];
-	cluster.height = max_p[2] - min_p[2];
-	cluster.min_p = min_p;
-	cluster.max_p = max_p;
+	float depth = max_p[0] - min_p[0];
+	float width = max_p[1] - min_p[1];
+	float height = max_p[2] - min_p[2];
 
+	Eigen::Vector3f cluster_size = {width, height, depth};
+
+	return cluster_size;
 }
-void Color_cone_detector::clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, std::vector<Clusters> &cluster_array, std::vector<pcl::PointIndices> &cluster_indices)
+
+void Color_cone_detector::clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, pcl::PointCloud<pcl::PointXYZ>::Ptr cone_cluster)
 {
-	pcl::PointCloud<pcl::PointXYZ>::Ptr ds_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr ds_cloud (new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::VoxelGrid<pcl::PointXYZ> vg;
 	vg.setInputCloud(cloud_in);
 	vg.setLeafSize(LEAF_SIZE, LEAF_SIZE, LEAF_SIZE);
@@ -136,11 +126,12 @@ void Color_cone_detector::clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_i
 
 	std::vector<float> tmp_point_z;
 	tmp_point_z.resize(ds_cloud->points.size());
-	for(int i=0; i<ds_cloud->points.size(); ++i){
+	for(size_t i=0; i<ds_cloud->points.size(); ++i){
 		tmp_point_z[i] = ds_cloud->points[i].z;
 		ds_cloud->points[i].z = 0.0;
 	}
 	
+	std::vector<pcl::PointIndices> cluster_indices;
 	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
 	tree->setInputCloud(ds_cloud);
 	pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
@@ -151,69 +142,88 @@ void Color_cone_detector::clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_i
 	ec.setInputCloud(ds_cloud);
 	ec.extract(cluster_indices);
 	
-	for(int i=0; i<ds_cloud->points.size(); ++i)
+	for(size_t i=0; i<ds_cloud->points.size(); ++i)
 		ds_cloud->points[i].z = tmp_point_z[i];
 
-	for(int i=0; i<cluster_indices.size(); ++i){
+	std::vector<Eigen::Vector4f> centroids;
+	for(std::vector<pcl::PointIndices>::const_iterator it=cluster_indices.begin(); it != cluster_indices.end(); ++it){
 		pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
-		cloud_cluster->points.resize(cluster_indices[i].indices.size());
 		
-		for(int j=0; j < cluster_indices[i].indices.size(); ++j){
-			int point_id = cluster_indices[i].indices[j];
-			cloud_cluster->points[j] = ds_cloud->points[point_id];
+		for(std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit)
+			cloud_cluster->points.push_back(ds_cloud->points[*pit]);
+		
+		Eigen::Vector3f cluster_size = calc_cluster_size(cloud_cluster);
+		Eigen::Vector4f cluster_centroid = calc_centroid(cloud_cluster);
+
+		if(pickup_cluster(cloud_cluster, cluster_centroid, cluster_size)){
+			cone_cluster->points.insert(cone_cluster->points.begin(), cloud_cluster->points.begin(), cloud_cluster->points.end());
+			centroids.push_back(cluster_centroid);
 		}
-		Cluster data;
-		getClusterInfo(*cloud_cluster, data);
-
-		pcl::PointXYZ center;
-		center.x = data.x;
-		center.y = data.y;
-		center.z = data.z;
-
-		Clusters cluster;
-		cluster.data = data;
-		cluster.centroid.points.push_back(center);
-
-		for(int i=0; i<cloud_cluster->points.size(); ++i)
-			cluster.points.points.push_back(cloud_cluster->points[i]);
-
-		cluster_array.push_back(cluster);
+	}
+	if(judge_stop_sign(centroids)){
+		std::cout << "-----closed point-----" << std::endl;
+		std_msgs::Bool flag;
+		flag.data = true;
+		flag_pub.publish(flag);
 	}
 }
 
-void Color_cone_detector::pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr clouds, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_centroid, std::vector<Clusters> &cluster_array)
+Eigen::Matrix3f Color_cone_detector::pca(pcl::PointCloud<pcl::PointXYZ>::Ptr clouds)
 {
-	for(int i=0; i<cluster_array.size(); ++i){
-		Clusters cluster = cluster_array[i];
-		Cluster data = cluster.data;
-		if(MIN_WIDTH < data.width && data.width < MAX_WIDTH){
-			if(MIN_HEIGHT < data.height && data.height < MAX_HEIGHT){
-				if(MIN_DEPTH < data.depth && data.depth < MAX_DEPTH){
-					double angle = atan2(cluster.centroid.points[0].y, cluster.centroid.points[0].x);
-					angle = pi_2_pi(angle);
-					if(fabs(angle) < ANGLE_THRESHOLD && cluster.centroid.points[0].z < CENTROID_THRESHOLD){	
-						//std::cout << "width  :" << data.width << "  height  :" << data.height << "  depth  :" << data.depth << std::endl;
-						//std::cout << "centroid_z :" << cluster.centroid.points[0] << std::endl;
-						//std::cout << "cluster_angle :" << angle << std::endl;
+	pcl::PCA<pcl::PointXYZ> pca;
+	pca.setInputCloud(clouds);
+	Eigen::Matrix3f eigen_vectors = pca.getEigenVectors();
+	Eigen::Vector3f eigen_values = pca.getEigenValues(); 
+	//std::cout << "eigen_values\n" << eigen_values << std::endl;
+	//std::cout << "eigen_vector\n" << eigen_vectors << std::endl;
 
-						for(int j=0; j<cluster.points.points.size(); ++j)
-							clouds->points.push_back(cluster.points.points[j]);
+	count++;
 
-						cloud_centroid->points.push_back(cluster.centroid.points[0]);
-					}
+	return eigen_vectors;
+}
+
+bool Color_cone_detector::pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster, Eigen::Vector4f centroid, Eigen::Vector3f size)
+{
+	double width = size[0];
+	double height = size[1];
+	double depth = size[2];
+
+	if(MIN_WIDTH < width && width < MAX_WIDTH){
+		if(MIN_HEIGHT < height && height < MAX_HEIGHT){
+			if(MIN_DEPTH < depth && depth < MAX_DEPTH){
+				double angle = atan2(centroid[1], centroid[0]);
+				angle = pi_2_pi(angle);
+				if(fabs(angle) < ANGLE_THRESHOLD && centroid[2] < CENTROID_THRESHOLD){
+
+					//std::cout << "width  :" << width << "  height  :" << height << "  depth  :" << depth << std::endl;
+					//std::cout << "centroid_z :" << centroid[2] << std::endl;
+					//std::cout << "cluster_angle :" << angle << std::endl;
+
+					//std::cout << "size : " << cluster->points.size() << std::endl;
+					Eigen::Matrix3f eigen_vectors = pca(cluster);
+					double x_vector_size = eigen_vectors(0,0);
+					double y_vector_size = eigen_vectors(0,1);
+					double xy_vector_size = sqrt(square(x_vector_size) + square(y_vector_size));
+					//std::cout << "x_size :" << x_vector_size << "y_size :" << y_vector_size << " xy_vector_size :"<< xy_vector_size << std::endl;
+					return true;
+
 				}
 			}
 		}
 	}
+	return false;
+}
 
+bool Color_cone_detector::judge_stop_sign(std::vector<Eigen::Vector4f> centroids)
+{
 	std::vector<double> target_dist = {DIST2, DIST3, DIST4}; 
 	std::vector<double> distances;
-	int color_cone_num = cloud_centroid->points.size();
+	int color_cone_num = centroids.size();
 	if(1 < color_cone_num && color_cone_num < 4){
 		//std::cout << "color_cone_num :" << color_cone_num << std::endl;
 		for(int i=0; i<color_cone_num; ++i){
 			for(int j=i+1; j<color_cone_num; ++j){
-				double dist = sqrt(square(cloud_centroid->points[i].x - cloud_centroid->points[j].x) + square(cloud_centroid->points[i].y - cloud_centroid->points[j].y));
+				double dist = sqrt(square(centroids[i][0] - centroids[j][0]) + square(centroids[i][1] - centroids[j][1]));
 				//std::cout << "dist" << i*(color_cone_num-1) + j - (i+1)<< " :" << dist << std::endl;
 				distances.push_back(dist);
 			}
@@ -222,41 +232,30 @@ void Color_cone_detector::pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr clo
 		for(int i=0; i<color_cone_num-1; ++i){
 			//std::cout << "dist_error :" << distances[i] - target_dist[color_cone_num-2] << std::endl;
 			if(fabs(distances[i] - target_dist[color_cone_num-2]) > DIST_ERROR_THRESHOLD)
-				return;
+				return false;
 		}
-		std::cout << "-----closed point-----" << std::endl;
-		std_msgs::Bool flag;
-		flag.data = true;
-		flag_pub.publish(flag);
+
+		return true;
 	}
 
+	return false;
 }
 
 void Color_cone_detector::velodyne_callback(const sensor_msgs::PointCloud2ConstPtr &msg)
 {
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::PointCloud<pcl::PointXYZ>::Ptr color_cone_clouds(new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_centroid(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cone_cluster (new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::fromROSMsg(*msg, *cloud_in);
 
-	pcl::fromROSMsg(*msg, *cloud);
-
-	std::vector<pcl::PointIndices> cluster_indices;
-
-	std::vector<Clusters> cluster_array;
-
-	if(0 < cloud->points.size())
-		clustering(cloud, cluster_array, cluster_indices);
-	
-	pickup_cluster(color_cone_clouds, cloud_centroid, cluster_array);
+	if(0 < cloud_in->points.size())
+		clustering(cloud_in, cone_cluster);
 
 	sensor_msgs::PointCloud2 cloud_ros;
-	pcl::toROSMsg(*color_cone_clouds, cloud_ros);
+	pcl::toROSMsg(*cone_cluster, cloud_ros);
 	cloud_ros.header.frame_id = msg->header.frame_id;
 	cloud_ros.header.stamp = ros::Time::now();
-	
 	//std::cout << "---publish---" << std::endl;
 	cloud_pub.publish(cloud_ros);
-
 }
 
 int main(int argc, char** argv)
