@@ -3,6 +3,7 @@
 #include <std_msgs/Bool.h>
 #include <pcl/kdtree/kdtree.h> 
 #include <pcl/search/kdtree.h> 
+#include <pcl/features/normal_3d_omp.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/segmentation/extract_clusters.h>
@@ -156,10 +157,35 @@ void Color_cone_detector::clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_i
 		Eigen::Vector4f cluster_centroid = calc_centroid(cloud_cluster);
 
 		if(pickup_cluster(cloud_cluster, cluster_centroid, cluster_size)){
-			cone_cluster->points.insert(cone_cluster->points.begin(), cloud_cluster->points.begin(), cloud_cluster->points.end());
-			centroids.push_back(cluster_centroid);
+			pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+			pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> normalEstimation;
+			normalEstimation.setInputCloud(cloud_cluster);
+			normalEstimation.setKSearch(10);
+			normalEstimation.setSearchMethod(tree);
+			normalEstimation.compute(*normals);
+			double ave_x = 0;
+			double ave_y = 0;
+			double ave_z = 0;
+			int n_size = normals->points.size();
+			for(int i=0; i<n_size; ++i){
+				ave_x += normals->points[i].normal_x;
+				ave_y += normals->points[i].normal_y;
+				ave_z += normals->points[i].normal_z;
+				//std::cout << "n_x: " << normals->points[i].normal_x << " n_y: " << normals->points[i].normal_y << " n_z :" << normals->points[i].normal_z << std::endl;
+
+			}
+			ave_x /= n_size;
+			ave_y /= n_size;
+			ave_z /= n_size;
+			std::cout << "ave_x: " << ave_x << " ave_y: " << ave_y << " ave_z: " << ave_z << std::endl;
+
+			if(ave_z > 0.1){
+				cone_cluster->points.insert(cone_cluster->points.begin(), cloud_cluster->points.begin(), cloud_cluster->points.end());
+				centroids.push_back(cluster_centroid);
+			}
 		}
 	}
+
 	if(judge_stop_sign(centroids)){
 		std::cout << "-----closed point-----" << std::endl;
 		std_msgs::Bool flag;
@@ -174,10 +200,8 @@ Eigen::Matrix3f Color_cone_detector::pca(pcl::PointCloud<pcl::PointXYZ>::Ptr clo
 	pca.setInputCloud(clouds);
 	Eigen::Matrix3f eigen_vectors = pca.getEigenVectors();
 	Eigen::Vector3f eigen_values = pca.getEigenValues(); 
-	//std::cout << "eigen_values\n" << eigen_values << std::endl;
-	//std::cout << "eigen_vector\n" << eigen_vectors << std::endl;
-
-	count++;
+	std::cout << "eigen_values\n" << eigen_values << std::endl;
+	std::cout << "eigen_vector\n" << eigen_vectors << std::endl;
 
 	return eigen_vectors;
 }
@@ -201,10 +225,6 @@ bool Color_cone_detector::pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr clu
 
 					//std::cout << "size : " << cluster->points.size() << std::endl;
 					Eigen::Matrix3f eigen_vectors = pca(cluster);
-					double x_vector_size = eigen_vectors(0,0);
-					double y_vector_size = eigen_vectors(0,1);
-					double xy_vector_size = sqrt(square(x_vector_size) + square(y_vector_size));
-					//std::cout << "x_size :" << x_vector_size << "y_size :" << y_vector_size << " xy_vector_size :"<< xy_vector_size << std::endl;
 					return true;
 
 				}
