@@ -7,283 +7,332 @@
 #include <pcl/filters/extract_indices.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/segmentation/extract_clusters.h>
+#include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/voxel_grid.h>
-#include <pcl/common/pca.h>
 #include <Eigen/Core>
 
-class Color_cone_detector{
-	private:
-		ros::NodeHandle nh;
-		ros::NodeHandle private_nh;
+class ClosedSignDetector{
+    private:
+        ros::NodeHandle nh;
+        ros::NodeHandle private_nh;
 
-		ros::Subscriber velodyne_sub;
-		ros::Publisher cloud_pub;
-		ros::Publisher flag_pub;
+        ros::Subscriber velodyne_sub;
+        ros::Publisher cloud_pub;
+        ros::Publisher flag_pub;
 
-		double LEAF_SIZE;
-		double TOLERANCE;
-		int MIN_CLUSTER_SIZE, MAX_CLUSTER_SIZE;
-		double MAX_WIDTH, MAX_HEIGHT, MAX_DEPTH;
-		double MIN_WIDTH, MIN_HEIGHT, MIN_DEPTH;
-		double ANGLE_THRESHOLD, CENTROID_THRESHOLD;
-		double DIST2, DIST3, DIST4;
-		double DIST_ERROR_THRESHOLD;
-	public:
-		Color_cone_detector();
-		double pi_2_pi(double angle);
-		double square(double a);
-		void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr& msg);
-		Eigen::Vector4f calc_centroid(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster);
-		Eigen::Vector3f calc_cluster_size(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster);
-		void clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, pcl::PointCloud<pcl::PointXYZ>::Ptr cone_cluster);
-
-		Eigen::Matrix3f pca(pcl::PointCloud<pcl::PointXYZ>::Ptr clouds);
-		bool judge_stop_sign(std::vector<Eigen::Vector4f> centroids);
-		bool pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster, Eigen::Vector4f centroid, Eigen::Vector3f size);
-
+        double LEAF_SIZE;
+        double TOLERANCE;
+        int MIN_CLUSTER_SIZE, MAX_CLUSTER_SIZE;
+        double MAX_WIDTH, MAX_HEIGHT, MAX_DEPTH;
+        double MIN_WIDTH, MIN_HEIGHT, MIN_DEPTH;
+        double ANGLE_THRESHOLD, CENTROID_THRESHOLD;
+        double LOWER_NORMAL_THRESHOLD, UPPER_NORMAL_THRESHOLD;
+        double PLANE_DIST_ERROR_THRESHOLD;
+        double INTENSITY_THRESHOLD;
+    public:
+        ClosedSignDetector();
+        void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr&);
+        Eigen::Vector4f calc_centroid(pcl::PointCloud<pcl::PointXYZI>::Ptr);
+        Eigen::Vector3f calc_cluster_size(pcl::PointCloud<pcl::PointXYZI>::Ptr);
+        void clustering(pcl::PointCloud<pcl::PointXYZI>::Ptr, std::vector<pcl::PointIndices>&);
+        void downsampling(pcl::PointCloud<pcl::PointXYZI>::Ptr, pcl::PointCloud<pcl::PointXYZI>::Ptr);
+        void normal_estimation(pcl::PointCloud<pcl::PointXYZI>::Ptr, pcl::PointCloud<pcl::Normal>::Ptr);
+        double pi_2_pi(double);
+        bool pickup_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr, Eigen::Vector4f, Eigen::Vector3f);
+        void plane_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr ,pcl::PointCloud<pcl::PointXYZI>::Ptr);
+        void process(pcl::PointCloud<pcl::PointXYZI>::Ptr, pcl::PointCloud<pcl::PointXYZI>::Ptr);
+        double square(double);
 };
 
-Color_cone_detector::Color_cone_detector()
-	: private_nh("~")
+ClosedSignDetector::ClosedSignDetector()
+    : private_nh("~")
 {
-	velodyne_sub = nh.subscribe("/velodyne_obstacles", 1, &Color_cone_detector::velodyne_callback, this);
-	cloud_pub = nh.advertise<sensor_msgs::PointCloud2>("/cloud/color_cone", 1);
-	flag_pub = nh.advertise<std_msgs::Bool>("/recognition/closed_sign", 1);
+    velodyne_sub = nh.subscribe("/velodyne_obstacles", 1, &ClosedSignDetector::velodyne_callback, this);
+    cloud_pub = nh.advertise<sensor_msgs::PointCloud2>("/cloud/closed_sign_cloud", 1);
+    flag_pub = nh.advertise<std_msgs::Bool>("/recognition/closed_sign", 1);
 
-	private_nh.param("LEAF_SIZE", LEAF_SIZE, 0.08);
-	private_nh.param("TOLERANCE", TOLERANCE, 0.15);
-	private_nh.param("MIN_CLUSTER_SIZE", MIN_CLUSTER_SIZE, 20);
-	private_nh.param("MAX_CLUSTER_SIZE", MAX_CLUSTER_SIZE, 1200);
-	private_nh.param("MAX_WIDTH", MAX_WIDTH, 0.5);
-	private_nh.param("MAX_HEIGHT", MAX_HEIGHT, 0.7);
-	private_nh.param("MAX_DEPTH", MAX_DEPTH, 0.45);
-	private_nh.param("MIN_WIDTH", MIN_WIDTH, 0.2);
-	private_nh.param("MIN_HEIGHT", MIN_HEIGHT, 0.6);
-	private_nh.param("MIN_DEPTH", MIN_DEPTH, 0.1);
-	private_nh.param("ANGLE_THRESHOLD", ANGLE_THRESHOLD, 0.5);
-	private_nh.param("CENTROID_THRESHOLD", CENTROID_THRESHOLD, -1.0);
-	private_nh.param("DIST2", DIST2, 1.9);
-	private_nh.param("DIST3", DIST3, 1.4);
-	private_nh.param("DIST4", DIST4, 1.0);
-	private_nh.param("DIST_ERROR_THRESHOLD", DIST_ERROR_THRESHOLD, 0.3);
+    private_nh.param("LEAF_SIZE", LEAF_SIZE, 0.08);
+    private_nh.param("TOLERANCE", TOLERANCE, 0.15);
+    private_nh.param("MIN_CLUSTER_SIZE", MIN_CLUSTER_SIZE, 20);
+    private_nh.param("MAX_CLUSTER_SIZE", MAX_CLUSTER_SIZE, 1200);
+    private_nh.param("MAX_WIDTH", MAX_WIDTH, 0.5);
+    private_nh.param("MAX_HEIGHT", MAX_HEIGHT, 0.7);
+    private_nh.param("MAX_DEPTH", MAX_DEPTH, 0.45);
+    private_nh.param("MIN_WIDTH", MIN_WIDTH, 0.2);
+    private_nh.param("MIN_HEIGHT", MIN_HEIGHT, 0.6);
+    private_nh.param("MIN_DEPTH", MIN_DEPTH, 0.1);
+    private_nh.param("ANGLE_THRESHOLD", ANGLE_THRESHOLD, 0.5);
+    private_nh.param("CENTROID_THRESHOLD", CENTROID_THRESHOLD, -1.0);
+    private_nh.param("LOWER_NORMAL_THRESHOLD", LOWER_NORMAL_THRESHOLD, 0.20);
+    private_nh.param("UPPER_NORMAL_THRESHOLD", UPPER_NORMAL_THRESHOLD, 0.30);
+    private_nh.param("INTENSITY_THRESHOLD", INTENSITY_THRESHOLD, 60.0);
+    private_nh.param("PLANE_DIST_ERROR_THRESHOLD", PLANE_DIST_ERROR_THRESHOLD, 0.005);
 }
 
-double Color_cone_detector::pi_2_pi(double angle)
+double ClosedSignDetector::pi_2_pi(double angle)
 {
-	return atan2(sin(angle), cos(angle));
+    return atan2(sin(angle), cos(angle));
 }
 
-double Color_cone_detector::square(double a)
+double ClosedSignDetector::square(double a)
 {
-	return a*a;
+    return a*a;
 }
 
-Eigen::Vector4f Color_cone_detector::calc_centroid(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster)
+Eigen::Vector4f ClosedSignDetector::calc_centroid(pcl::PointCloud<pcl::PointXYZI>::Ptr cluster)
 {
-	Eigen::Vector4f centroid;
-	pcl::compute3DCentroid(*cluster, centroid);
-	
-	return centroid;
-}
-Eigen::Vector3f Color_cone_detector::calc_cluster_size(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster)
-{
-
-	Eigen::Vector3f min_p;
-	min_p[0] = cluster->points[0].x;
-	min_p[1] = cluster->points[0].y;
-	min_p[2] = cluster->points[0].z;
-
-	Eigen::Vector3f max_p;
-	max_p[0] = cluster->points[0].x;
-	max_p[1] = cluster->points[0].y;
-	max_p[2] = cluster->points[0].z;
-
-	for(size_t i=0; i<cluster->points.size(); ++i){
-		if(cluster->points[i].x < min_p[0]) min_p[0] = cluster->points[i].x;
-		if(cluster->points[i].y < min_p[1]) min_p[1] = cluster->points[i].y;
-		if(cluster->points[i].z < min_p[2]) min_p[2] = cluster->points[i].z;
-
-		if(cluster->points[i].x > max_p[0]) max_p[0] = cluster->points[i].x;
-		if(cluster->points[i].y > max_p[1]) max_p[1] = cluster->points[i].y;
-		if(cluster->points[i].z > max_p[2]) max_p[2] = cluster->points[i].z;
-	}
-
-	float depth = max_p[0] - min_p[0];
-	float width = max_p[1] - min_p[1];
-	float height = max_p[2] - min_p[2];
-
-	Eigen::Vector3f cluster_size = {width, height, depth};
-
-	return cluster_size;
+    Eigen::Vector4f centroid;
+    pcl::compute3DCentroid(*cluster, centroid);
+    
+    return centroid;
 }
 
-void Color_cone_detector::clustering(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in, pcl::PointCloud<pcl::PointXYZ>::Ptr cone_cluster)
+Eigen::Vector3f ClosedSignDetector::calc_cluster_size(pcl::PointCloud<pcl::PointXYZI>::Ptr cluster)
 {
-	pcl::PointCloud<pcl::PointXYZ>::Ptr ds_cloud (new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::VoxelGrid<pcl::PointXYZ> vg;
-	vg.setInputCloud(cloud_in);
-	vg.setLeafSize(LEAF_SIZE, LEAF_SIZE, LEAF_SIZE);
-	vg.filter(*ds_cloud);
 
-	std::vector<float> tmp_point_z;
-	tmp_point_z.resize(ds_cloud->points.size());
-	for(size_t i=0; i<ds_cloud->points.size(); ++i){
-		tmp_point_z[i] = ds_cloud->points[i].z;
-		ds_cloud->points[i].z = 0.0;
-	}
-	
-	std::vector<pcl::PointIndices> cluster_indices;
-	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
-	tree->setInputCloud(ds_cloud);
-	pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-	ec.setClusterTolerance(TOLERANCE);
-	ec.setMinClusterSize(MIN_CLUSTER_SIZE);
-	ec.setMaxClusterSize(MAX_CLUSTER_SIZE);
-	ec.setSearchMethod(tree);
-	ec.setInputCloud(ds_cloud);
-	ec.extract(cluster_indices);
-	
-	for(size_t i=0; i<ds_cloud->points.size(); ++i)
-		ds_cloud->points[i].z = tmp_point_z[i];
+    Eigen::Vector3f min_p;
+    min_p[0] = cluster->points[0].x;
+    min_p[1] = cluster->points[0].y;
+    min_p[2] = cluster->points[0].z;
 
-	std::vector<Eigen::Vector4f> centroids;
-	for(std::vector<pcl::PointIndices>::const_iterator it=cluster_indices.begin(); it != cluster_indices.end(); ++it){
-		pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
-		
-		for(std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit)
-			cloud_cluster->points.push_back(ds_cloud->points[*pit]);
-		
-		Eigen::Vector3f cluster_size = calc_cluster_size(cloud_cluster);
-		Eigen::Vector4f cluster_centroid = calc_centroid(cloud_cluster);
+    Eigen::Vector3f max_p;
+    max_p[0] = cluster->points[0].x;
+    max_p[1] = cluster->points[0].y;
+    max_p[2] = cluster->points[0].z;
 
-		if(pickup_cluster(cloud_cluster, cluster_centroid, cluster_size)){
-			pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-			pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> normalEstimation;
-			normalEstimation.setInputCloud(cloud_cluster);
-			normalEstimation.setKSearch(10);
-			normalEstimation.setSearchMethod(tree);
-			normalEstimation.compute(*normals);
-			double ave_normal_x = 0;
-			double ave_normal_y = 0;
-			double ave_normal_z = 0;
-			int n_size = normals->points.size();
-			for(int i=0; i<n_size; ++i){
-				ave_normal_x += normals->points[i].normal_x;
-				ave_normal_y += normals->points[i].normal_y;
-				ave_normal_z += normals->points[i].normal_z;
-				//std::cout << "n_x: " << normals->points[i].normal_x << " n_y: " << normals->points[i].normal_y << " n_z :" << normals->points[i].normal_z << std::endl;
+    for(size_t i=0; i<cluster->points.size(); ++i){
+        if(cluster->points[i].x < min_p[0]) min_p[0] = cluster->points[i].x;
+        if(cluster->points[i].y < min_p[1]) min_p[1] = cluster->points[i].y;
+        if(cluster->points[i].z < min_p[2]) min_p[2] = cluster->points[i].z;
 
-			}
-			ave_normal_x /= n_size;
-			ave_normal_y /= n_size;
-			ave_normal_z /= n_size;
-			std::cout << "ave_x: " << ave_normal_x << " ave_y: " << ave_normal_y << " ave_z: " << ave_normal_z << std::endl;
+        if(cluster->points[i].x > max_p[0]) max_p[0] = cluster->points[i].x;
+        if(cluster->points[i].y > max_p[1]) max_p[1] = cluster->points[i].y;
+        if(cluster->points[i].z > max_p[2]) max_p[2] = cluster->points[i].z;
+    }
 
-			if(ave_normal_z > 0.1){
-				cone_cluster->points.insert(cone_cluster->points.begin(), cloud_cluster->points.begin(), cloud_cluster->points.end());
-				centroids.push_back(cluster_centroid);
-			}
-		}
-	}
+    float depth = max_p[0] - min_p[0];
+    float width = max_p[1] - min_p[1];
+    float height = max_p[2] - min_p[2];
 
-	if(judge_stop_sign(centroids)){
-		std::cout << "-----closed point-----" << std::endl;
-		std_msgs::Bool flag;
-		flag.data = true;
-		flag_pub.publish(flag);
-	}
+    Eigen::Vector3f cluster_size = {width, height, depth};
+
+    return cluster_size;
 }
 
-Eigen::Matrix3f Color_cone_detector::pca(pcl::PointCloud<pcl::PointXYZ>::Ptr clouds)
+void ClosedSignDetector::plane_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr cluster, pcl::PointCloud<pcl::PointXYZI>::Ptr plane_cluster)
 {
-	pcl::PCA<pcl::PointXYZ> pca;
-	pca.setInputCloud(clouds);
-	Eigen::Matrix3f eigen_vectors = pca.getEigenVectors();
-	Eigen::Vector3f eigen_values = pca.getEigenValues(); 
-	//std::cout << "eigen_values\n" << eigen_values << std::endl;
-	//std::cout << "eigen_vector\n" << eigen_vectors << std::endl;
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+    pcl::SACSegmentation<pcl::PointXYZI> segmentation;
+    segmentation.setInputCloud(cluster);
+    segmentation.setModelType(pcl::SACMODEL_PLANE);
+    segmentation.setMethodType(pcl::SAC_RANSAC);
+    segmentation.setDistanceThreshold(PLANE_DIST_ERROR_THRESHOLD);
+    segmentation.setOptimizeCoefficients(true);
 
-	return eigen_vectors;
+    pcl::PointIndices inlierIndices;
+    segmentation.segment(inlierIndices, *coefficients);
+
+    if(inlierIndices.indices.size())
+        pcl::copyPointCloud<pcl::PointXYZI>(*cluster, inlierIndices, *plane_cluster);
+    
+    //std::cout << "plane size :" << plane_cluster->points.size() << std::endl;
+    for(auto point : plane_cluster->points){
+        //std::cout << "x :" << point.x << " y :" << point.y << " z :" << point.z << std::endl;
+    }
 }
 
-bool Color_cone_detector::pickup_cluster(pcl::PointCloud<pcl::PointXYZ>::Ptr cluster, Eigen::Vector4f centroid, Eigen::Vector3f size)
+void ClosedSignDetector::downsampling(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in, pcl::PointCloud<pcl::PointXYZI>::Ptr ds_cloud)
 {
-	double width = size[0];
-	double height = size[1];
-	double depth = size[2];
-
-	if(MIN_WIDTH < width && width < MAX_WIDTH){
-		if(MIN_HEIGHT < height && height < MAX_HEIGHT){
-			if(MIN_DEPTH < depth && depth < MAX_DEPTH){
-				double angle = atan2(centroid[1], centroid[0]);
-				angle = pi_2_pi(angle);
-				if(fabs(angle) < ANGLE_THRESHOLD && centroid[2] < CENTROID_THRESHOLD){
-
-					//std::cout << "width  :" << width << "  height  :" << height << "  depth  :" << depth << std::endl;
-					//std::cout << "centroid_z :" << centroid[2] << std::endl;
-					//std::cout << "cluster_angle :" << angle << std::endl;
-
-					//std::cout << "size : " << cluster->points.size() << std::endl;
-					Eigen::Matrix3f eigen_vectors = pca(cluster);
-					return true;
-
-				}
-			}
-		}
-	}
-	return false;
+    pcl::VoxelGrid<pcl::PointXYZI> vg;
+    vg.setInputCloud(cloud_in);
+    vg.setLeafSize(LEAF_SIZE, LEAF_SIZE, LEAF_SIZE);
+    vg.filter(*ds_cloud);
 }
 
-bool Color_cone_detector::judge_stop_sign(std::vector<Eigen::Vector4f> centroids)
+void ClosedSignDetector::clustering(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in, std::vector<pcl::PointIndices>& cluster_indices)
 {
-	std::vector<double> target_dist = {DIST2, DIST3, DIST4}; 
-	std::vector<double> distances;
-	int color_cone_num = centroids.size();
-	if(1 < color_cone_num && color_cone_num < 4){
-		//std::cout << "color_cone_num :" << color_cone_num << std::endl;
-		for(int i=0; i<color_cone_num; ++i){
-			for(int j=i+1; j<color_cone_num; ++j){
-				double dist = sqrt(square(centroids[i][0] - centroids[j][0]) + square(centroids[i][1] - centroids[j][1]));
-				//std::cout << "dist" << i*(color_cone_num-1) + j - (i+1)<< " :" << dist << std::endl;
-				distances.push_back(dist);
-			}
-		}
-		std::sort(distances.begin(), distances.end());
-		for(int i=0; i<color_cone_num-1; ++i){
-			//std::cout << "dist_error :" << distances[i] - target_dist[color_cone_num-2] << std::endl;
-			if(fabs(distances[i] - target_dist[color_cone_num-2]) > DIST_ERROR_THRESHOLD)
-				return false;
-		}
+    pcl::search::KdTree<pcl::PointXYZI>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZI>);
+    tree->setInputCloud(cloud_in);
+    pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
+    ec.setClusterTolerance(TOLERANCE);
+    ec.setMinClusterSize(MIN_CLUSTER_SIZE);
+    ec.setMaxClusterSize(MAX_CLUSTER_SIZE);
+    ec.setSearchMethod(tree);
+    ec.setInputCloud(cloud_in);
+    ec.extract(cluster_indices);
+} 
 
-		return true;
-	}
-
-	return false;
+void ClosedSignDetector::normal_estimation(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in, pcl::PointCloud<pcl::Normal>::Ptr normals)
+{
+    pcl::search::KdTree<pcl::PointXYZI>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZI>);
+    tree->setInputCloud(cloud_in);
+    pcl::NormalEstimationOMP<pcl::PointXYZI, pcl::Normal> ne;
+    ne.setInputCloud(cloud_in);
+    ne.setKSearch(10);
+    ne.setSearchMethod(tree);
+    ne.compute(*normals);
 }
 
-void Color_cone_detector::velodyne_callback(const sensor_msgs::PointCloud2ConstPtr &msg)
+void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in, pcl::PointCloud<pcl::PointXYZI>::Ptr stop_sign_cluster)
 {
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in(new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cone_cluster (new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::fromROSMsg(*msg, *cloud_in);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr ds_cloud (new pcl::PointCloud<pcl::PointXYZI>);
+    downsampling(cloud_in, ds_cloud);
 
-	if(0 < cloud_in->points.size())
-		clustering(cloud_in, cone_cluster);
+    std::vector<float> tmp_point_z;
+    tmp_point_z.resize(ds_cloud->points.size());
+    for(size_t i=0; i<ds_cloud->points.size(); ++i){
+        tmp_point_z[i] = ds_cloud->points[i].z;
+        ds_cloud->points[i].z = 0.0;
+    }
+    
+    std::vector<pcl::PointIndices> cluster_indices;
+    clustering(ds_cloud, cluster_indices);
+    
+    for(size_t i=0; i<ds_cloud->points.size(); ++i)
+        ds_cloud->points[i].z = tmp_point_z[i];
 
-	sensor_msgs::PointCloud2 cloud_ros;
-	pcl::toROSMsg(*cone_cluster, cloud_ros);
-	cloud_ros.header.frame_id = msg->header.frame_id;
-	cloud_ros.header.stamp = ros::Time::now();
-	//std::cout << "---publish---" << std::endl;
-	cloud_pub.publish(cloud_ros);
+    //pcl::PointCloud<pcl::PointXYZI>::Ptr points_all (new pcl::PointCloud<pcl::PointXYZI>);
+    std::vector<Eigen::Vector4f> centroids;
+    for(std::vector<pcl::PointIndices>::const_iterator it=cluster_indices.begin(); it != cluster_indices.end(); ++it){
+        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZI>);
+        
+        for(std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); ++pit)
+            cloud_cluster->points.push_back(ds_cloud->points[*pit]);
+
+        Eigen::Vector3f cluster_size = calc_cluster_size(cloud_cluster);
+        Eigen::Vector4f cluster_centroid = calc_centroid(cloud_cluster);
+
+        if(pickup_cluster(cloud_cluster, cluster_centroid, cluster_size)){
+            pcl::PointCloud<pcl::PointXYZI>::Ptr plane_cluster(new pcl::PointCloud<pcl::PointXYZI>);
+            plane_filter(cloud_cluster, plane_cluster);
+            if(plane_cluster->points.size() < 10)
+                continue;
+
+            pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+            normal_estimation(plane_cluster, normals);
+            double avg_normal_x = 0;
+            double avg_normal_y = 0;
+            double avg_normal_z = 0;
+            int point_num = normals->points.size();
+            for(int i=0; i<point_num; ++i){
+                avg_normal_x += normals->points[i].normal_x;
+                avg_normal_y += normals->points[i].normal_y;
+                avg_normal_z += normals->points[i].normal_z;
+                //std::cout << "n_x: " << normals->points[i].normal_x << " n_y: " << normals->points[i].normal_y << " n_z :" << normals->points[i].normal_z << std::endl;
+            }
+            avg_normal_x /= point_num;
+            avg_normal_y /= point_num;
+            avg_normal_z /= point_num;
+
+            if(avg_normal_z > UPPER_NORMAL_THRESHOLD || avg_normal_z < LOWER_NORMAL_THRESHOLD)
+                continue;
+
+            //std::cout << "p_width  :" << plane_size[0] << "  p_height  :" << plane_size[1] << "  p_depth  :" << plane_size[2] << std::endl;
+            //std::cout << "default size :" << cloud_cluster->points.size() << " p size :" << plane_cluster->points.size() << std::endl;
+            //std::cout << "avg_x: " << avg_normal_x << " avg_y: " << avg_normal_y << " avg_z: " << avg_normal_z << std::endl;
+            //std::cout << "===============================================" << std::endl;
+            
+            std::sort(plane_cluster->points.begin(), plane_cluster->points.end(), [](const pcl::PointXYZI &a, const pcl::PointXYZI &b) {
+                return a.intensity > b.intensity;
+            });
+
+            double intensity_sum = 0.0;
+            double sample_intensity_sum = 0.0;
+            int sample_point_num = (int)(plane_cluster->points.size()*0.2 + 1);
+            for(size_t i=0; i<point_num; ++i){
+                if(i < sample_point_num)
+                    sample_intensity_sum += plane_cluster->points[i].intensity;
+                intensity_sum += plane_cluster->points[i].intensity;
+            }
+            sample_intensity_sum /= sample_point_num;
+            intensity_sum /= point_num;
+            //std::cout << "sum :" << intensity_sum << std::endl;
+
+            //for(auto point : plane_cluster->points)
+               // std::cout << "intensity :" << point.intensity << std::endl;
+
+            if(sample_intensity_sum < INTENSITY_THRESHOLD)
+                continue;
+
+            stop_sign_cluster->points.insert(stop_sign_cluster->points.begin(), plane_cluster->points.begin(), plane_cluster->points.end());
+            centroids.push_back(cluster_centroid);
+            std::cout << "-----------------------------------------------------------" << std::endl;
+            std::cout << "width  :" << cluster_size[0] << "  height  :" << cluster_size[1] << "  depth  :" << cluster_size[2] << std::endl;
+            std::cout << "centroid :" << cluster_centroid[2] << std::endl;
+            std::cout << "avg_x: " << avg_normal_x << " avg_y: " << avg_normal_y << " avg_z: " << avg_normal_z << std::endl;
+            std::cout << "point num :" << point_num << "sample num :" << sample_point_num << "intensity_ratio :" << sample_intensity_sum / intensity_sum << std::endl;
+            //std::cout << "intensity_sum :" << intensity_sum << std::endl;
+            for(auto point : plane_cluster->points)
+                std::cout << "intensity :" << point.intensity << std::endl;
+        }
+        //points_all->points.insert(points_all->points.begin(), cloud_cluster->points.begin(), cloud_cluster->points.end());
+    }
+    if(centroids.size() == 2){
+        std_msgs::Bool flag;
+        flag.data = true;
+        flag_pub.publish(flag);
+    }
+/*
+    sensor_msgs::PointCloud2 cloud_ros;
+    pcl::toROSMsg(*points_all, cloud_ros);
+    cloud_ros.header.frame_id = "velodyne";
+    cloud_ros.header.stamp = ros::Time::now();
+    cloud_pub.publish(cloud_ros);
+*/   
+
+}
+
+bool ClosedSignDetector::pickup_cluster(pcl::PointCloud<pcl::PointXYZI>::Ptr cluster, Eigen::Vector4f centroid, Eigen::Vector3f size)
+{
+    double width = size[0];
+    double height = size[1];
+    double depth = size[2];
+
+    if(MIN_WIDTH < width && width < MAX_WIDTH){
+        if(MIN_HEIGHT < height && height < MAX_HEIGHT){
+            if(MIN_DEPTH < depth && depth < MAX_DEPTH){
+                double angle = atan2(centroid[1], centroid[0]);
+                angle = pi_2_pi(angle);
+                if(fabs(angle) < ANGLE_THRESHOLD && centroid[2] < CENTROID_THRESHOLD){
+
+                    //std::cout << "width  :" << width << "  height  :" << height << "  depth  :" << depth << std::endl;
+                    //std::cout << "centroid_z :" << centroid[2] << std::endl;
+                    //std::cout << "cluster_angle :" << angle << std::endl;
+
+                    //std::cout << "size : " << cluster->points.size() << std::endl;
+                    //Eigen::Matrix3f eigen_vectors = pca(cluster);
+                    return true;
+
+                }
+            }
+        }
+    }
+    return false;
+}
+
+void ClosedSignDetector::velodyne_callback(const sensor_msgs::PointCloud2ConstPtr &msg)
+{
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr stop_sign_cluster (new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::fromROSMsg(*msg, *cloud_in);
+
+    if(cloud_in->points.size())
+        process(cloud_in, stop_sign_cluster);
+
+    sensor_msgs::PointCloud2 cloud_ros;
+    pcl::toROSMsg(*stop_sign_cluster, cloud_ros);
+    cloud_ros.header.frame_id = msg->header.frame_id;
+    cloud_ros.header.stamp = ros::Time::now();
+    cloud_pub.publish(cloud_ros);
+
 }
 
 int main(int argc, char** argv)
 {
-	ros::init(argc, argv, "road_closed_sign_detector");
-	
-	Color_cone_detector detector;
-	ros::spin();
+    ros::init(argc, argv, "closed_sign_detector");
+    
+    ClosedSignDetector detector;
+    ros::spin();
 
-	return 0;
+    return 0;
 }
