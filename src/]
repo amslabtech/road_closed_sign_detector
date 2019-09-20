@@ -26,7 +26,6 @@ class ClosedSignDetector{
         int MIN_CLUSTER_SIZE, MAX_CLUSTER_SIZE;
         double MAX_WIDTH, MAX_HEIGHT, MAX_DEPTH;
         double MIN_WIDTH, MIN_HEIGHT, MIN_DEPTH;
-        double SAMPLE_RATIO;
         double ANGLE_THRESHOLD, CENTROID_THRESHOLD;
         double LOWER_NORMAL_THRESHOLD, UPPER_NORMAL_THRESHOLD;
         double DIST_ERROR_THRESHOLD;
@@ -65,7 +64,6 @@ ClosedSignDetector::ClosedSignDetector()
     private_nh.param("MIN_WIDTH", MIN_WIDTH, 0.2);
     private_nh.param("MIN_HEIGHT", MIN_HEIGHT, 0.6);
     private_nh.param("MIN_DEPTH", MIN_DEPTH, 0.1);
-    private_nh.param("SAMPLE_RATIO", SAMPLE_RATIO, 0.5);
     private_nh.param("ANGLE_THRESHOLD", ANGLE_THRESHOLD, 0.5);
     private_nh.param("CENTROID_THRESHOLD", CENTROID_THRESHOLD, -1.0);
     private_nh.param("LOWER_NORMAL_THRESHOLD", LOWER_NORMAL_THRESHOLD, 0.20);
@@ -274,7 +272,7 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in, 
             });
 
             double sample_avg_intensity = 0.0;
-            int sample_point_num = (int)(plane_cluster->points.size() * SAMPLE_RATIO + 1);
+            int sample_point_num = (int)(plane_cluster->points.size()*0.2 + 1);
             for(size_t i=0; i<sample_point_num; ++i){
                 sample_avg_intensity += plane_cluster->points[i].intensity;
             }
@@ -291,14 +289,14 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in, 
             std::cout << "centroid :" << cluster_centroid[2] << std::endl;
             std::cout << "avg_x: " << avg_normal_x << " avg_y: " << avg_normal_y << " avg_z: " << avg_normal_z << std::endl;
             std::cout << "point num :" << point_num << "sample num :" << sample_point_num << "intensity_ratio :" << intensity_ratio << std::endl;
-            std::cout << "avg_intensity :" << avg_intensity << "sample_avg_intensity :" << sample_avg_intensity << std::endl;
+            std::cout << "avg_intensity :" << avg_intensity "sample_avg_intensity :" << sample_avg_intensity << std::endl;
             for(auto point : plane_cluster->points)
                 std::cout << "intensity :" << point.intensity << std::endl;
         }
         //points_all->points.insert(points_all->points.begin(), cloud_cluster->points.begin(), cloud_cluster->points.end());
     }
     if(centroids.size() == 2){
-        double cluster_dist = calc_dist(centroids);
+        cluster_dist = calc_dist(centroids);
         if(cluster_dist > (2.0 -DIST_ERROR_THRESHOLD) && cluster_dist < (5.0 + DIST_ERROR_THRESHOLD))
             closed_flag.data = true;
     }
