@@ -5,19 +5,21 @@
 	<arg name="min_cluster_size" default="18"/>
 	<arg name="max_cluster_size" default="200"/>
 	<arg name="max_width" default="0.55"/>
-	<arg name="max_height" default="0.83"/>
+	<arg name="max_height" default="0.85"/>
 	<arg name="max_depth" default="0.4"/>
 	<arg name="min_width" default="0.15"/>
 	<arg name="min_height" default="0.73"/>
 	<arg name="min_depth" default="0.1"/>
+    <arg name="sample_ratio" default="0.25"/>
 	<arg name="angle_threshold" default="1.309"/>
     <arg name="centroid_threshold" default="0.0"/>
     <arg name="lower_normal_threshold" default="0.18"/>
     <arg name="upper_normal_threshold" default="0.3"/>
-    <arg name="intensity_threshold" default="60.0"/>
+    <arg name="intensity_ratio" default="3.0"/>
+    <arg name="dist_error_threshold" default="0.5"/>
     <arg name="plane_dist_error_threshold" default="0.005"/>
 
-	<node pkg="road_closed_sign_detector" type="test" name="test" output="screen">
+	<node pkg="road_closed_sign_detector" type="road_closed_sign_detector" name="road_closed_sign_detector" output="screen">
 		<param name="LEAF_SIZE" value="$(arg leaf_size)" type="double"/>
 		<param name="TOLERANCE" value="$(arg tolerance)" type="double"/>
 		<param name="MIN_CLUSTER_SIZE" value="$(arg min_cluster_size)" type="int"/>
@@ -28,11 +30,14 @@
 		<param name="MIN_WIDTH" value="$(arg min_width)" type="double"/>
 		<param name="MIN_HEIGHT" value="$(arg min_height)" type="double"/>
 		<param name="MIN_DEPTH" value="$(arg min_depth)" type="double"/>
+        <param name="SAMPLE_RATIO" value="$(arg sample_ratio)" type="double"/>
 		<param name="ANGLE_THRESHOLD" value="$(arg angle_threshold)" type="double"/>
 		<param name="CENTROID_THRESHOLD" value="$(arg centroid_threshold)" type="double"/>
         <param name="LOWER_NORMAL_THRESHOLD" value="$(arg lower_normal_threshold)" type="double"/>
         <param name="UPPER_NORMAL_THRESHOLD" value="$(arg upper_normal_threshold)" type="double"/>
-        <param name="INTENSITY_THRESHOLD" value="$(arg intensity_threshold)" type="double"/>
+        <param name="INTENSITY_RATIO" value="$(arg intensity_ratio)" type="double"/>
+        <param name="DIST_ERROR_THRESHOLD" value="$(arg dist_error_threshold)" type="double"/>
         <param name="PLANE_DIST_ERROR_THRESHOLD" value="$(arg plane_dist_error_threshold)" type="double"/>
 	</node>
+
 </launch>

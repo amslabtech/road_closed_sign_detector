@@ -290,8 +290,8 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in, 
             std::cout << "width  :" << cluster_size[0] << "  height  :" << cluster_size[1] << "  depth  :" << cluster_size[2] << std::endl;
             std::cout << "centroid :" << cluster_centroid[2] << std::endl;
             std::cout << "avg_x: " << avg_normal_x << " avg_y: " << avg_normal_y << " avg_z: " << avg_normal_z << std::endl;
-            std::cout << "point num :" << point_num << "sample num :" << sample_point_num << "intensity_ratio :" << intensity_ratio << std::endl;
-            std::cout << "avg_intensity :" << avg_intensity << "sample_avg_intensity :" << sample_avg_intensity << std::endl;
+            std::cout << "point num :" << point_num << " sample num :" << sample_point_num << " intensity_ratio :" << intensity_ratio << std::endl;
+            std::cout << "avg_intensity :" << avg_intensity << " sample_avg_intensity :" << sample_avg_intensity << std::endl;
             for(auto point : plane_cluster->points)
                 std::cout << "intensity :" << point.intensity << std::endl;
         }
