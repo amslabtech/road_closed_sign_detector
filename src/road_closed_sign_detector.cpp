@@ -75,11 +75,6 @@ ClosedSignDetector::ClosedSignDetector()
     private_nh.param("DIST_ERROR_THRESHOLD", DIST_ERROR_THRESHOLD, 0.5);
 }
 
-double ClosedSignDetector::square(double a)
-{
-    return a*a;
-}
-
 Eigen::Vector4f ClosedSignDetector::calc_centroid(pcl::PointCloud<pcl::PointXYZI>::Ptr cluster)
 {
     Eigen::Vector4f centroid;
@@ -310,6 +305,11 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in, 
     cloud_pub.publish(cloud_ros);
 */   
 
+}
+
+double ClosedSignDetector::square(double a)
+{
+    return a*a;
 }
 
 void ClosedSignDetector::velodyne_callback(const sensor_msgs::PointCloud2ConstPtr &msg)
