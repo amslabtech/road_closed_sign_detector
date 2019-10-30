@@ -1,7 +1,7 @@
 # road_closed_sign_detector
 
 ## Published topics
-- /cloud/color_cone (sensor_msgs/PointCloud2)
+- /cloud/closed_sign_cloud (sensor_msgs/PointCloud2)
 - /recognition/closed_sign (std_msgs/Bool)
 
 ## Subscribed topics
