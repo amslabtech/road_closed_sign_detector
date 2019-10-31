@@ -223,7 +223,8 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in,
         if(pickup_cluster(cloud_cluster, cluster_centroid, cluster_size)){
             pcl::PointCloud<pcl::PointXYZI>::Ptr plane_cluster(new pcl::PointCloud<pcl::PointXYZI>);
             plane_filter(cloud_cluster, plane_cluster);
-            if((int)plane_cluster->points.size() < PLANE_CLUSTER_SIZE){
+            int point_num = plane_cluster->points.size();
+            if(point_num < PLANE_CLUSTER_SIZE){
                 continue;
             }
             pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
@@ -231,7 +232,6 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in,
             double avg_normal_x = 0;
             double avg_normal_y = 0;
             double avg_normal_z = 0;
-            int point_num = normals->points.size();
             for(int i=0; i<point_num; ++i){
                 avg_normal_x += normals->points[i].normal_x;
                 avg_normal_y += normals->points[i].normal_y;
@@ -271,11 +271,14 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in,
     }
     if(centroids.size() == 2){
         double cluster_dist = calc_dist(centroids);
+        std::cout << "\033[31mcluster dist :" << cluster_dist << "\033[m" << std::endl;
         if(cluster_dist > (2.0 -DIST_ERROR_THRESHOLD) && cluster_dist < (5.0 + DIST_ERROR_THRESHOLD)){
             closed_flag.data = true;
+            flag_pub.publish(closed_flag);
+            std::cout << "\033[33m----------------------- closed sign ----------------------- \033[m" << std::endl;
         }
     }
-    std::cout << ros::Time::now().toSec() - start << "[s]" << std::endl;
+    // std::cout << ros::Time::now().toSec() - start << "[s]" << std::endl;
 /*
     sensor_msgs::PointCloud2 cloud_ros;
     pcl::toROSMsg(*points_all, cloud_ros);
@@ -283,7 +286,6 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in,
     cloud_ros.header.stamp = ros::Time::now();
     cloud_pub.publish(cloud_ros);
 */   
-
 }
 
 double ClosedSignDetector::square(double a)
@@ -296,7 +298,6 @@ void ClosedSignDetector::velodyne_callback(const sensor_msgs::PointCloud2ConstPt
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr stop_sign_cluster (new pcl::PointCloud<pcl::PointXYZI>);
     pcl::fromROSMsg(*msg, *cloud_in);
-    closed_flag.data = false;
     if(cloud_in->points.size()){
             process(cloud_in, stop_sign_cluster);
     }
@@ -305,7 +306,6 @@ void ClosedSignDetector::velodyne_callback(const sensor_msgs::PointCloud2ConstPt
     cloud_ros.header.frame_id = msg->header.frame_id;
     cloud_ros.header.stamp = ros::Time::now();
     cloud_pub.publish(cloud_ros);
-    flag_pub.publish(closed_flag);
 }
 
 int main(int argc, char** argv)
