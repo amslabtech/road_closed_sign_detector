@@ -19,7 +19,7 @@
     <arg name="dist_error_threshold" default="0.8"/>
     <arg name="plane_dist_error_threshold" default="0.005"/>
 
-	<node pkg="road_closed_sign_detector" type="road_closed_sign_detector" name="road_closed_sign_detector" output="screen" ns="road_closed_sign_detector">
+	<node pkg="road_closed_sign_detector" type="road_closed_sign_detector" name="road_closed_sign_detector" ns="road_closed_sign_detector">
 		<param name="LEAF_SIZE" value="$(arg leaf_size)" type="double"/>
 		<param name="TOLERANCE" value="$(arg tolerance)" type="double"/>
 		<param name="MIN_CLUSTER_SIZE" value="$(arg min_cluster_size)" type="int"/>
