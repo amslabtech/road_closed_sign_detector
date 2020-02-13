@@ -1,4 +1,7 @@
 <launch>
+    <arg name="use_ransac" default="true"/>
+    <arg name="use_normal" default="true"/>
+    <arg name="use_curvature" default="true"/>
     <arg name="leaf_size" default="0.06"/>
     <arg name="tolerance" default="0.20"/>
     <arg name="min_cluster_size" default="20"/>
@@ -21,6 +24,9 @@
     <arg name="plane_dist_error_threshold" default="0.005"/>
 
     <node pkg="road_closed_sign_detector" type="road_closed_sign_detector" name="road_closed_sign_detector" ns="road_closed_sign_detector">
+        <param name="USE_RANSAC" value="$(arg use_ransac)" type="bool"/>
+        <param name="USE_NORMAL" value="$(arg use_normal)" type="bool"/>
+        <param name="USE_CURVATURE" value="$(arg use_curvature)" type="bool"/>
         <param name="LEAF_SIZE" value="$(arg leaf_size)" type="double"/>
         <param name="TOLERANCE" value="$(arg tolerance)" type="double"/>
         <param name="MIN_CLUSTER_SIZE" value="$(arg min_cluster_size)" type="int"/>
