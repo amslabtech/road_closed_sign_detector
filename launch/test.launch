@@ -1,8 +1,8 @@
 <launch>
-	<include file="$(find velodyne_pointcloud)/launch/32e_points.launch"/>
-	<include file="$(find velodyne_height_map)/launch/amsl_velodyne_heightmap.launch"/>
+    <include file="$(find velodyne_pointcloud)/launch/32e_points.launch"/>
+    <include file="$(find velodyne_height_map)/launch/amsl_velodyne_heightmap.launch"/>
     <include file="$(find road_closed_sign_detector)/launch/road_closed_sign_detector.launch"/>
 
-	<node pkg="rviz" type="rviz" name="rviz" args="-d $(find road_closed_sign_detector)/config/test.rviz"/>
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find road_closed_sign_detector)/config/test.rviz"/>
 
 </launch>
