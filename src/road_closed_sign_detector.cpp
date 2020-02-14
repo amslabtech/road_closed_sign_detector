@@ -27,6 +27,8 @@ ClosedSignDetector<T>::ClosedSignDetector()
     private_nh.param("CENTROID_THRESHOLD", CENTROID_THRESHOLD, -1.0);
     private_nh.param("LOWER_NORMAL_THRESHOLD", LOWER_NORMAL_THRESHOLD, 0.20);
     private_nh.param("UPPER_NORMAL_THRESHOLD", UPPER_NORMAL_THRESHOLD, 0.30);
+    private_nh.param("LOWER_INTENSITY_THRESHOLD", LOWER_INTENSITY_THRESHOLD, 20);
+    private_nh.param("UPPER_INTENSITY_THRESHOLD", UPPER_INTENSITY_THRESHOLD, 255);
     private_nh.param("INTENSITY_RATIO", INTENSITY_RATIO, 60.0);
     private_nh.param("CURVATURE_THRESHOLD", CURVATURE_THRESHOLD, 0.02);
     private_nh.param("PLANE_DIST_ERROR_THRESHOLD", PLANE_DIST_ERROR_THRESHOLD, 0.005);
@@ -107,6 +109,16 @@ void ClosedSignDetector<T>::downsampling(typename pcl::PointCloud<T>::Ptr& cloud
     vg.filter(*ds_cloud);
 }
 
+template <typename T>
+void ClosedSignDetector<T>::filter_intensity(typename pcl::PointCloud<T>::Ptr& cloud_in, typename pcl::PointCloud<T>::Ptr& cloud_out)
+{
+    pcl::PassThrough<T> pass;
+    pass.setInputCloud(cloud_in);
+    pass.setFilterFieldName("intensity");
+    pass.setFilterLimits(LOWER_INTENSITY_THRESHOLD, UPPER_INTENSITY_THRESHOLD);
+    pass.filter(*cloud_out);
+}
+
 template<>
 void ClosedSignDetector<pcl::PointXYZINormal>::normal_estimation(pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud_in, pcl::PointCloud<pcl::Normal>::Ptr& normals)
 {
@@ -179,24 +191,29 @@ void ClosedSignDetector<T>::process(typename pcl::PointCloud<T>::Ptr& cloud_in, 
     typename pcl::PointCloud<T>::Ptr ds_cloud (new pcl::PointCloud<T>);
     downsampling(cloud_in, ds_cloud);
     double avg_intensity = 0.0;
-    std::vector<float> tmp_point_z;
     size_t ds_point_num = ds_cloud->points.size();
     for(size_t i=0; i<ds_point_num; ++i){
-        tmp_point_z.emplace_back(ds_cloud->points[i].z);
-        ds_cloud->points[i].z = 0.0;
         avg_intensity += ds_cloud->points[i].intensity;
     }
     avg_intensity /= ds_point_num;
-    std::vector<pcl::PointIndices> cluster_indices;
-    clustering(ds_cloud, cluster_indices);
-    for(size_t i=0; i<ds_cloud->points.size(); ++i){
-        ds_cloud->points[i].z = tmp_point_z[i];
+    typename pcl::PointCloud<T>::Ptr intensity_cloud (new pcl::PointCloud<T>);
+    filter_intensity(ds_cloud, intensity_cloud);
+    std::vector<float> tmp_point_z;
+    for(size_t i=0; i<intensity_cloud->points.size(); ++i){
+        tmp_point_z.emplace_back(intensity_cloud->points[i].z);
+        intensity_cloud->points[i].z = 0.0;
     }
+    std::vector<pcl::PointIndices> cluster_indices;
+    clustering(intensity_cloud, cluster_indices);
+    for(size_t i=0; i<intensity_cloud->points.size(); ++i){
+        intensity_cloud->points[i].z = tmp_point_z[i];
+    }
+    typename pcl::PointCloud<T>::Ptr points_all (new pcl::PointCloud<T>);
     std::vector<Eigen::Vector4f> centroids;
     for(const auto& cidx : cluster_indices){
         typename pcl::PointCloud<T>::Ptr cloud_cluster (new pcl::PointCloud<T>);
         for(const auto& pidx : cidx.indices){
-            cloud_cluster->points.emplace_back(ds_cloud->points[pidx]);
+            cloud_cluster->points.emplace_back(intensity_cloud->points[pidx]);
         }
         Eigen::Vector3f cluster_size = calc_cluster_size(cloud_cluster);
         Eigen::Vector4f cluster_centroid = calc_centroid(cloud_cluster);

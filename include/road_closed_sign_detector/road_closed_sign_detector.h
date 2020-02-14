@@ -8,6 +8,7 @@
 #include <pcl/search/kdtree.h>
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/filters/passthrough.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/segmentation/sac_segmentation.h>
@@ -33,6 +34,7 @@ class ClosedSignDetector{
         double SAMPLE_RATIO;
         double ANGLE_THRESHOLD, CENTROID_THRESHOLD;
         double LOWER_NORMAL_THRESHOLD, UPPER_NORMAL_THRESHOLD;
+        int LOWER_INTENSITY_THRESHOLD, UPPER_INTENSITY_THRESHOLD;
         double DIST_ERROR_THRESHOLD;
         double PLANE_DIST_ERROR_THRESHOLD;
         double INTENSITY_RATIO;
@@ -46,6 +48,7 @@ class ClosedSignDetector{
         double calc_intensity_ratio(typename pcl::PointCloud<T>::Ptr&, double);
         void clustering(typename pcl::PointCloud<T>::Ptr&, std::vector<pcl::PointIndices>&);
         void downsampling(typename pcl::PointCloud<T>::Ptr&, typename pcl::PointCloud<T>::Ptr&);
+        void filter_intensity(typename pcl::PointCloud<T>::Ptr&, typename pcl::PointCloud<T>::Ptr&);
         void normal_estimation(typename pcl::PointCloud<T>::Ptr&, pcl::PointCloud<pcl::Normal>::Ptr&);
         bool is_valid_cluster_size(typename pcl::PointCloud<T>::Ptr&, Eigen::Vector4f, Eigen::Vector3f);
         void plane_filter(typename pcl::PointCloud<T>::Ptr&, typename pcl::PointCloud<T>::Ptr&);
