@@ -1,24 +1,26 @@
 <launch>
     <arg name="use_ransac" default="false"/>
     <arg name="use_normal" default="false"/>
-    <arg name="use_curvature" default="false"/>
+    <arg name="use_curvature" default="true"/>
     <arg name="leaf_size" default="0.06"/>
-    <arg name="tolerance" default="0.20"/>
+    <arg name="tolerance" default="0.06"/>
     <arg name="min_cluster_size" default="20"/>
     <arg name="max_cluster_size" default="1000"/>
-    <arg name="plane_cluster_size" default="20"/>
-    <arg name="max_width" default="0.7"/>
+    <arg name="plane_cluster_size" default="15"/>
+    <arg name="max_width" default="0.6"/>
     <arg name="max_height" default="0.9"/>
-    <arg name="max_depth" default="0.7"/>
-    <arg name="min_width" default="0.2"/>
-    <arg name="min_height" default="0.73"/>
-    <arg name="min_depth" default="0.2"/>
+    <arg name="max_depth" default="0.6"/>
+    <arg name="min_width" default="0.1"/>
+    <arg name="min_height" default="0.70"/>
+    <arg name="min_depth" default="0.1"/>
     <arg name="sample_ratio" default="0.25"/>
     <arg name="angle_threshold" default="1.4"/>
     <arg name="centroid_threshold" default="-0.5"/>
-    <arg name="lower_normal_threshold" default="0.15"/>
+    <arg name="lower_normal_threshold" default="0.10"/>
     <arg name="upper_normal_threshold" default="0.3"/>
-    <arg name="curvature_threshold" default="0.02"/>
+    <arg name="lower_intensity_threshold" default="25"/>
+    <arg name="upper_intensity_threshold" default="255"/>
+    <arg name="curvature_threshold" default="0.03"/>
     <arg name="intensity_ratio" default="3.0"/>
     <arg name="dist_error_threshold" default="0.8"/>
     <arg name="plane_dist_error_threshold" default="0.005"/>
@@ -43,6 +45,8 @@
         <param name="CENTROID_THRESHOLD" value="$(arg centroid_threshold)" type="double"/>
         <param name="LOWER_NORMAL_THRESHOLD" value="$(arg lower_normal_threshold)" type="double"/>
         <param name="UPPER_NORMAL_THRESHOLD" value="$(arg upper_normal_threshold)" type="double"/>
+        <param name="LOWER_INTENSITY_THRESHOLD" value="$(arg lower_intensity_threshold)" type="int"/>
+        <param name="UPPER_INTENSITY_THRESHOLD" value="$(arg upper_intensity_threshold)" type="int"/>
         <param name="CURVATURE_THRESHOLD" value="$(arg curvature_threshold)" type="double"/>
         <param name="INTENSITY_RATIO" value="$(arg intensity_ratio)" type="double"/>
         <param name="DIST_ERROR_THRESHOLD" value="$(arg dist_error_threshold)" type="double"/>

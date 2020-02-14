@@ -1,8 +1,8 @@
 <launch>
     <include file="$(find velodyne_pointcloud)/launch/32e_points.launch"/>
-    <include file="$(find perfect_velodyne)/launch/normal_estimation.launch"/>
+    <!-- <include file="$(find perfect_velodyne)/launch/normal_estimation.launch"/> -->
     <include file="$(find velodyne_height_map)/launch/amsl_velodyne_heightmap.launch">
-        <arg name="input_topic" value="/perfect_velodyne/normal"/>
+        <!-- <arg name="input_topic" value="/perfect_velodyne/normal"/> -->
     </include>
     <include file="$(find road_closed_sign_detector)/launch/road_closed_sign_detector.launch"/>
 
