@@ -119,6 +119,23 @@ void ClosedSignDetector<T>::filter_intensity(typename pcl::PointCloud<T>::Ptr& c
     pass.filter(*cloud_out);
 }
 
+template <typename T>
+void ClosedSignDetector<T>::filter_plane(typename pcl::PointCloud<T>::Ptr& cluster, typename pcl::PointCloud<T>::Ptr& plane_cluster)
+{
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+    pcl::SACSegmentation<T> segmentation;
+    segmentation.setInputCloud(cluster);
+    segmentation.setModelType(pcl::SACMODEL_PLANE);
+    segmentation.setMethodType(pcl::SAC_RANSAC);
+    segmentation.setDistanceThreshold(PLANE_DIST_ERROR_THRESHOLD);
+    segmentation.setOptimizeCoefficients(true);
+    pcl::PointIndices inlierIndices;
+    segmentation.segment(inlierIndices, *coefficients);
+    if(inlierIndices.indices.size()){
+        pcl::copyPointCloud<T>(*cluster, inlierIndices, *plane_cluster);
+    }
+}
+
 template<>
 void ClosedSignDetector<pcl::PointXYZINormal>::normal_estimation(pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud_in, pcl::PointCloud<pcl::Normal>::Ptr& normals)
 {
@@ -167,23 +184,6 @@ bool ClosedSignDetector<T>::is_valid_cluster_size(typename pcl::PointCloud<T>::P
 }
 
 template <typename T>
-void ClosedSignDetector<T>::plane_filter(typename pcl::PointCloud<T>::Ptr& cluster, typename pcl::PointCloud<T>::Ptr& plane_cluster)
-{
-    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
-    pcl::SACSegmentation<T> segmentation;
-    segmentation.setInputCloud(cluster);
-    segmentation.setModelType(pcl::SACMODEL_PLANE);
-    segmentation.setMethodType(pcl::SAC_RANSAC);
-    segmentation.setDistanceThreshold(PLANE_DIST_ERROR_THRESHOLD);
-    segmentation.setOptimizeCoefficients(true);
-    pcl::PointIndices inlierIndices;
-    segmentation.segment(inlierIndices, *coefficients);
-    if(inlierIndices.indices.size()){
-        pcl::copyPointCloud<T>(*cluster, inlierIndices, *plane_cluster);
-    }
-}
-
-template <typename T>
 void ClosedSignDetector<T>::process(typename pcl::PointCloud<T>::Ptr& cloud_in, typename pcl::PointCloud<T>::Ptr& stop_sign_cluster)
 {
     double start = ros::Time::now().toSec();
@@ -221,7 +221,7 @@ void ClosedSignDetector<T>::process(typename pcl::PointCloud<T>::Ptr& cloud_in, 
         if(is_valid_cluster_size(cloud_cluster, cluster_centroid, cluster_size)){
             typename pcl::PointCloud<T>::Ptr plane_cluster(new pcl::PointCloud<T>);
             if(USE_RANSAC){
-                plane_filter(cloud_cluster, plane_cluster);
+                filter_plane(cloud_cluster, plane_cluster);
             }else{
                 plane_cluster = cloud_cluster;
             }
@@ -302,7 +302,6 @@ void ClosedSignDetector<T>::velodyne_callback(const sensor_msgs::PointCloud2Cons
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "closed_sign_detector");
-    ros::NodeHandle n("~");
     ClosedSignDetector<pcl::PointXYZINormal> detector;
     ros::spin();
 

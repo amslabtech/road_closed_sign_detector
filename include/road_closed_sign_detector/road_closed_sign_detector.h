@@ -49,9 +49,9 @@ class ClosedSignDetector{
         void clustering(typename pcl::PointCloud<T>::Ptr&, std::vector<pcl::PointIndices>&);
         void downsampling(typename pcl::PointCloud<T>::Ptr&, typename pcl::PointCloud<T>::Ptr&);
         void filter_intensity(typename pcl::PointCloud<T>::Ptr&, typename pcl::PointCloud<T>::Ptr&);
+        void filter_plane(typename pcl::PointCloud<T>::Ptr&, typename pcl::PointCloud<T>::Ptr&);
         void normal_estimation(typename pcl::PointCloud<T>::Ptr&, pcl::PointCloud<pcl::Normal>::Ptr&);
         bool is_valid_cluster_size(typename pcl::PointCloud<T>::Ptr&, Eigen::Vector4f, Eigen::Vector3f);
-        void plane_filter(typename pcl::PointCloud<T>::Ptr&, typename pcl::PointCloud<T>::Ptr&);
         void process(typename pcl::PointCloud<T>::Ptr&, typename pcl::PointCloud<T>::Ptr&);
 };
 
