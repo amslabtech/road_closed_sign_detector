@@ -14,6 +14,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <Eigen/Core>
 
+template <typename T>
 class ClosedSignDetector{
     private:
         ros::NodeHandle nh;
@@ -39,16 +40,16 @@ class ClosedSignDetector{
     public:
         ClosedSignDetector();
         void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr&);
-        Eigen::Vector4f calc_centroid(pcl::PointCloud<pcl::PointXYZI>::Ptr&);
-        Eigen::Vector3f calc_cluster_size(pcl::PointCloud<pcl::PointXYZI>::Ptr&);
+        Eigen::Vector4f calc_centroid(typename pcl::PointCloud<T>::Ptr&);
+        Eigen::Vector3f calc_cluster_size(typename pcl::PointCloud<T>::Ptr&);
         double calc_dist(std::vector<Eigen::Vector4f>&);
-        double calc_intensity_ratio(pcl::PointCloud<pcl::PointXYZI>::Ptr&, double);
-        void clustering(pcl::PointCloud<pcl::PointXYZI>::Ptr&, std::vector<pcl::PointIndices>&);
-        void downsampling(pcl::PointCloud<pcl::PointXYZI>::Ptr&, pcl::PointCloud<pcl::PointXYZI>::Ptr&);
-        void normal_estimation(pcl::PointCloud<pcl::PointXYZI>::Ptr&, pcl::PointCloud<pcl::Normal>::Ptr&);
-        bool is_valid_cluster_size(pcl::PointCloud<pcl::PointXYZI>::Ptr&, Eigen::Vector4f, Eigen::Vector3f);
-        void plane_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr&, pcl::PointCloud<pcl::PointXYZI>::Ptr&);
-        void process(pcl::PointCloud<pcl::PointXYZI>::Ptr&, pcl::PointCloud<pcl::PointXYZI>::Ptr&);
+        double calc_intensity_ratio(typename pcl::PointCloud<T>::Ptr&, double);
+        void clustering(typename pcl::PointCloud<T>::Ptr&, std::vector<pcl::PointIndices>&);
+        void downsampling(typename pcl::PointCloud<T>::Ptr&, typename pcl::PointCloud<T>::Ptr&);
+        void normal_estimation(typename pcl::PointCloud<T>::Ptr&, pcl::PointCloud<pcl::Normal>::Ptr&);
+        bool is_valid_cluster_size(typename pcl::PointCloud<T>::Ptr&, Eigen::Vector4f, Eigen::Vector3f);
+        void plane_filter(typename pcl::PointCloud<T>::Ptr&, typename pcl::PointCloud<T>::Ptr&);
+        void process(typename pcl::PointCloud<T>::Ptr&, typename pcl::PointCloud<T>::Ptr&);
 };
 
 #endif //ROAD_CLOSED_SIGN_DETECTOR_H

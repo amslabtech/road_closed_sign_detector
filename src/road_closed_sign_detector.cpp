@@ -1,6 +1,7 @@
 #include "road_closed_sign_detector/road_closed_sign_detector.h"
 
-ClosedSignDetector::ClosedSignDetector()
+template <typename T>
+ClosedSignDetector<T>::ClosedSignDetector()
     : private_nh("~")
 {
     velodyne_sub = nh.subscribe("/velodyne_obstacles", 1, &ClosedSignDetector::velodyne_callback, this);
@@ -32,18 +33,21 @@ ClosedSignDetector::ClosedSignDetector()
     private_nh.param("DIST_ERROR_THRESHOLD", DIST_ERROR_THRESHOLD, 0.5);
 }
 
-inline double Pow(double x){
+template <typename T>
+inline double Pow(T x){
     return x*x;
 }
 
-Eigen::Vector4f ClosedSignDetector::calc_centroid(pcl::PointCloud<pcl::PointXYZI>::Ptr& cluster)
+template <typename T>
+Eigen::Vector4f ClosedSignDetector<T>::calc_centroid(typename pcl::PointCloud<T>::Ptr& cluster)
 {
     Eigen::Vector4f centroid;
     pcl::compute3DCentroid(*cluster, centroid);
     return centroid;
 }
 
-Eigen::Vector3f ClosedSignDetector::calc_cluster_size(pcl::PointCloud<pcl::PointXYZI>::Ptr& cluster)
+template <typename T>
+Eigen::Vector3f ClosedSignDetector<T>::calc_cluster_size(typename pcl::PointCloud<T>::Ptr& cluster)
 {
     Eigen::Vector3f min_p = Eigen::Vector3f::Constant(std::numeric_limits<float>::infinity());
     Eigen::Vector3f max_p = Eigen::Vector3f::Constant(-std::numeric_limits<float>::infinity());
@@ -62,12 +66,14 @@ Eigen::Vector3f ClosedSignDetector::calc_cluster_size(pcl::PointCloud<pcl::Point
     return cluster_size;
 }
 
-double ClosedSignDetector::calc_dist(std::vector<Eigen::Vector4f>& centroids)
+template <typename T>
+double ClosedSignDetector<T>::calc_dist(std::vector<Eigen::Vector4f>& centroids)
 {
     return sqrt(Pow(centroids[0][0] - centroids[1][0]) + Pow(centroids[0][1] - centroids[1][1]));
 }
 
-double ClosedSignDetector::calc_intensity_ratio(pcl::PointCloud<pcl::PointXYZI>::Ptr& cluster_points, double avg_intensity)
+template <typename T>
+double ClosedSignDetector<T>::calc_intensity_ratio(typename pcl::PointCloud<T>::Ptr& cluster_points, double avg_intensity)
 {
     double sample_avg_intensity = 0.0;
     int sample_point_num = cluster_points->points.size() * SAMPLE_RATIO + 1;
@@ -78,11 +84,12 @@ double ClosedSignDetector::calc_intensity_ratio(pcl::PointCloud<pcl::PointXYZI>:
     return sample_avg_intensity / avg_intensity;
 }
 
-void ClosedSignDetector::clustering(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in, std::vector<pcl::PointIndices>& cluster_indices)
+template <typename T>
+void ClosedSignDetector<T>::clustering(typename pcl::PointCloud<T>::Ptr& cloud_in, std::vector<pcl::PointIndices>& cluster_indices)
 {
-    pcl::search::KdTree<pcl::PointXYZI>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZI>);
+    typename pcl::search::KdTree<T>::Ptr tree (new pcl::search::KdTree<T>);
     tree->setInputCloud(cloud_in);
-    pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
+    pcl::EuclideanClusterExtraction<T> ec;
     ec.setClusterTolerance(TOLERANCE);
     ec.setMinClusterSize(MIN_CLUSTER_SIZE);
     ec.setMaxClusterSize(MAX_CLUSTER_SIZE);
@@ -91,54 +98,67 @@ void ClosedSignDetector::clustering(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_
     ec.extract(cluster_indices);
 }
 
-void ClosedSignDetector::downsampling(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in, pcl::PointCloud<pcl::PointXYZI>::Ptr& ds_cloud)
+template <typename T>
+void ClosedSignDetector<T>::downsampling(typename pcl::PointCloud<T>::Ptr& cloud_in, typename pcl::PointCloud<T>::Ptr& ds_cloud)
 {
-    pcl::VoxelGrid<pcl::PointXYZI> vg;
+    pcl::VoxelGrid<T> vg;
     vg.setInputCloud(cloud_in);
     vg.setLeafSize(LEAF_SIZE, LEAF_SIZE, LEAF_SIZE);
     vg.filter(*ds_cloud);
 }
 
-void ClosedSignDetector::normal_estimation(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in, pcl::PointCloud<pcl::Normal>::Ptr& normals)
+template<>
+void ClosedSignDetector<pcl::PointXYZINormal>::normal_estimation(pcl::PointCloud<pcl::PointXYZINormal>::Ptr& cloud_in, pcl::PointCloud<pcl::Normal>::Ptr& normals)
 {
-    pcl::search::KdTree<pcl::PointXYZI>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZI>);
+    pcl::copyPointCloud(*cloud_in, *normals);
+}
+
+template <typename T>
+void ClosedSignDetector<T>::normal_estimation(typename pcl::PointCloud<T>::Ptr& cloud_in, pcl::PointCloud<pcl::Normal>::Ptr& normals)
+{
+    typename pcl::search::KdTree<T>::Ptr tree (new pcl::search::KdTree<T>);
     tree->setInputCloud(cloud_in);
-    pcl::NormalEstimationOMP<pcl::PointXYZI, pcl::Normal> ne;
+    pcl::NormalEstimationOMP<T, pcl::Normal> ne;
     ne.setInputCloud(cloud_in);
     ne.setKSearch(5);
     ne.setSearchMethod(tree);
     ne.compute(*normals);
 }
 
-bool ClosedSignDetector::is_valid_cluster_size(pcl::PointCloud<pcl::PointXYZI>::Ptr& cluster, Eigen::Vector4f centroid, Eigen::Vector3f size)
+template <typename T>
+bool ClosedSignDetector<T>::is_valid_cluster_size(typename pcl::PointCloud<T>::Ptr& cluster, Eigen::Vector4f centroid, Eigen::Vector3f size)
 {
     double width = size[0];
     double height = size[1];
     double depth = size[2];
-    std::cout << "size : " << cluster->points.size() << std::endl;
+    std::cout << "width :" << width;
+    std::cout << "\theight :" << height;
+    std::cout << "\tdepth :" << depth << std::endl;
+    std::cout << "centroid x :" << centroid[0];
+    std::cout << "\tcentroid y :" << centroid[1];
+    std::cout << "\tcentroid_z :" << centroid[2] << std::endl;
     if(MIN_WIDTH < width && width < MAX_WIDTH){
         if(MIN_HEIGHT < height && height < MAX_HEIGHT){
             if(MIN_DEPTH < depth && depth < MAX_DEPTH){
                 double angle = atan2(centroid[1], centroid[0]);
                 if(fabs(angle) < ANGLE_THRESHOLD && centroid[2] < CENTROID_THRESHOLD){
-                    //std::cout << "width  :" << width << "  height  :" << height << "  depth  :" << depth << std::endl;
-                    //std::cout << "centroid_z :" << centroid[2] << std::endl;
-                    //std::cout << "cluster_angle :" << angle << std::endl;
-                    //std::cout << "size : " << cluster->points.size() << std::endl;
-                    std::cout << "true" << std::endl;
+                    // std::cout << "width :" << width << " height :" << height << " depth :" << depth << std::endl;
+                    // std::cout << "centroid_z :" << centroid[2] << std::endl;
+                    // std::cout << "cluster_angle :" << angle << std::endl;
+                    // std::cout << "size : " << cluster->points.size() << std::endl;
                     return true;
                 }
             }
         }
     }
-    std::cout << "false" << std::endl;
     return false;
 }
 
-void ClosedSignDetector::plane_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr& cluster, pcl::PointCloud<pcl::PointXYZI>::Ptr& plane_cluster)
+template <typename T>
+void ClosedSignDetector<T>::plane_filter(typename pcl::PointCloud<T>::Ptr& cluster, typename pcl::PointCloud<T>::Ptr& plane_cluster)
 {
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
-    pcl::SACSegmentation<pcl::PointXYZI> segmentation;
+    pcl::SACSegmentation<T> segmentation;
     segmentation.setInputCloud(cluster);
     segmentation.setModelType(pcl::SACMODEL_PLANE);
     segmentation.setMethodType(pcl::SAC_RANSAC);
@@ -147,15 +167,16 @@ void ClosedSignDetector::plane_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr& clus
     pcl::PointIndices inlierIndices;
     segmentation.segment(inlierIndices, *coefficients);
     if(inlierIndices.indices.size()){
-        pcl::copyPointCloud<pcl::PointXYZI>(*cluster, inlierIndices, *plane_cluster);
+        pcl::copyPointCloud<T>(*cluster, inlierIndices, *plane_cluster);
     }
 }
 
-void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in, pcl::PointCloud<pcl::PointXYZI>::Ptr& stop_sign_cluster)
+template <typename T>
+void ClosedSignDetector<T>::process(typename pcl::PointCloud<T>::Ptr& cloud_in, typename pcl::PointCloud<T>::Ptr& stop_sign_cluster)
 {
     double start = ros::Time::now().toSec();
 
-    pcl::PointCloud<pcl::PointXYZI>::Ptr ds_cloud (new pcl::PointCloud<pcl::PointXYZI>);
+    typename pcl::PointCloud<T>::Ptr ds_cloud (new pcl::PointCloud<T>);
     downsampling(cloud_in, ds_cloud);
     double avg_intensity = 0.0;
     std::vector<float> tmp_point_z;
@@ -173,14 +194,15 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in,
     }
     std::vector<Eigen::Vector4f> centroids;
     for(const auto& cidx : cluster_indices){
-        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZI>);
+        typename pcl::PointCloud<T>::Ptr cloud_cluster (new pcl::PointCloud<T>);
         for(const auto& pidx : cidx.indices){
             cloud_cluster->points.emplace_back(ds_cloud->points[pidx]);
         }
         Eigen::Vector3f cluster_size = calc_cluster_size(cloud_cluster);
         Eigen::Vector4f cluster_centroid = calc_centroid(cloud_cluster);
+        std::cout << "-----------------------------------" << std::endl;
         if(is_valid_cluster_size(cloud_cluster, cluster_centroid, cluster_size)){
-            pcl::PointCloud<pcl::PointXYZI>::Ptr plane_cluster(new pcl::PointCloud<pcl::PointXYZI>);
+            typename pcl::PointCloud<T>::Ptr plane_cluster(new pcl::PointCloud<T>);
             if(USE_RANSAC){
                 plane_filter(cloud_cluster, plane_cluster);
             }else{
@@ -194,7 +216,7 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in,
             pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
             normal_estimation(plane_cluster, normals);
             Eigen::Vector3f avg_normal = Eigen::Vector3f::Constant(0.0);
-            double curvature = 0;
+            double curvature = 0.0;
             for(size_t i=0; i<plane_point_num; ++i){
                 avg_normal[0] += normals->points[i].normal_x;
                 avg_normal[1] += normals->points[i].normal_y;
@@ -215,7 +237,7 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in,
                     continue;
                 }
             }
-            std::sort(plane_cluster->points.begin(), plane_cluster->points.end(), [](const pcl::PointXYZI &a, const pcl::PointXYZI &b) {
+            std::sort(plane_cluster->points.begin(), plane_cluster->points.end(), [](const T &a, const T &b) {
                 return a.intensity > b.intensity;
             });
             double intensity_ratio = calc_intensity_ratio(plane_cluster, avg_intensity);
@@ -244,13 +266,14 @@ void ClosedSignDetector::process(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud_in,
     // std::cout << ros::Time::now().toSec() - start << "[s]" << std::endl;
 }
 
-void ClosedSignDetector::velodyne_callback(const sensor_msgs::PointCloud2ConstPtr &msg)
+template <typename T>
+void ClosedSignDetector<T>::velodyne_callback(const sensor_msgs::PointCloud2ConstPtr &msg)
 {
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in(new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::PointCloud<pcl::PointXYZI>::Ptr stop_sign_cluster (new pcl::PointCloud<pcl::PointXYZI>);
+    typename pcl::PointCloud<T>::Ptr cloud_in(new pcl::PointCloud<T>);
+    typename pcl::PointCloud<T>::Ptr stop_sign_cluster (new pcl::PointCloud<T>);
     pcl::fromROSMsg(*msg, *cloud_in);
     if(cloud_in->points.size()){
-            process(cloud_in, stop_sign_cluster);
+        process(cloud_in, stop_sign_cluster);
     }
     sensor_msgs::PointCloud2 cloud_ros;
     pcl::toROSMsg(*stop_sign_cluster, cloud_ros);
@@ -262,7 +285,8 @@ void ClosedSignDetector::velodyne_callback(const sensor_msgs::PointCloud2ConstPt
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "closed_sign_detector");
-    ClosedSignDetector detector;
+    ros::NodeHandle n("~");
+    ClosedSignDetector<pcl::PointXYZINormal> detector;
     ros::spin();
 
     return 0;
